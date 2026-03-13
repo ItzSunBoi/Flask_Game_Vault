@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){
+  var key='urlmask:'+location.pathname,token=sessionStorage.getItem(key);
+  if(!token){token=Math.random().toString(36).substr(2,10);sessionStorage.setItem(key,token);}
+  try{var m=JSON.parse(sessionStorage.getItem('gameTokenMap')||'{}');m[token]=location.pathname+location.search;sessionStorage.setItem('gameTokenMap',JSON.stringify(m));}catch(e){}
+  if(location.pathname!=='/x/')history.replaceState(null,'','/x/?t='+token);
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Trivia — GameVault</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0;padding:0;box-sizing:border-box; }
+body { background:#05070f;color:#e0f0ff;font-family:'Rajdhani',sans-serif;
+  display:flex;flex-direction:column;align-items:center;min-height:100vh; }
+header { width:100%;padding:10px 20px;border-bottom:1px solid rgba(255,200,0,0.2);
+  display:flex;align-items:center;gap:14px; }
+.back { color:rgba(255,200,0,0.7);text-decoration:none;font-size:12px;letter-spacing:1px;
+  text-transform:uppercase;font-family:'Orbitron',monospace; }
+h1 { font-family:'Orbitron',monospace;font-size:18px;color:#ffc800;letter-spacing:3px; }
+.room-tag { margin-left:auto;font-family:'Orbitron',monospace;font-size:11px;color:rgba(255,200,0,0.4); }
+main { display:flex;flex-direction:column;align-items:center;padding:16px;gap:14px;width:100%;max-width:600px; }
+
+/* Lobby */
+.lobby { display:flex;flex-direction:column;align-items:center;gap:14px;width:100%; }
+.players-list { width:100%;background:#0a0f1a;border:1px solid rgba(255,200,0,0.15);
+  border-radius:10px;padding:14px; }
+.players-list h3 { font-family:'Orbitron',monospace;font-size:12px;color:rgba(255,200,0,0.6);
+  letter-spacing:2px;margin-bottom:10px; }
+.player-row { display:flex;align-items:center;gap:10px;padding:6px 0;
+  border-bottom:1px solid rgba(255,200,0,0.06); }
+.player-row:last-child { border-bottom:none; }
+.player-dot { width:8px;height:8px;border-radius:50%;background:#ffc800; }
+.player-name { font-size:15px;font-weight:700; }
+.start-btn { background:#ffc800;color:#000;border:none;padding:13px 32px;border-radius:8px;
+  font-family:'Orbitron',monospace;font-size:13px;font-weight:700;cursor:pointer;
+  letter-spacing:2px;text-transform:uppercase;transition:opacity .2s; }
+.start-btn:hover{opacity:.85} .start-btn:disabled{opacity:.35;cursor:default;}
+.hint { font-family:'Orbitron',monospace;font-size:11px;color:rgba(255,200,0,0.35);text-align:center; }
+
+/* Game */
+.game { display:none;flex-direction:column;align-items:center;gap:14px;width:100%; }
+.round-info { font-family:'Orbitron',monospace;font-size:12px;color:rgba(255,200,0,0.5);letter-spacing:2px; }
+.timer-bar { width:100%;height:6px;background:#0d1426;border-radius:3px;overflow:hidden; }
+.timer-fill { height:100%;background:#ffc800;transition:width 1s linear;border-radius:3px; }
+.question-box { background:#0a0f1a;border:1px solid rgba(255,200,0,0.2);border-radius:12px;
+  padding:20px;width:100%;text-align:center; }
+.question-text { font-size:20px;font-weight:700;line-height:1.4; }
+.options { display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%; }
+.opt-btn { padding:14px 12px;background:#0d1426;border:2px solid rgba(255,200,0,0.2);
+  border-radius:10px;font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;
+  color:#e0f0ff;cursor:pointer;transition:all .15s;text-align:center; }
+.opt-btn:hover:not(:disabled) { background:#161e30;border-color:rgba(255,200,0,0.6);color:#ffc800; }
+.opt-btn:disabled { cursor:default; }
+.opt-btn.correct  { background:#0d2a10;border-color:#00ff66;color:#00ff66; }
+.opt-btn.wrong    { background:#2a0d0d;border-color:#ff4444;color:#ff4444; }
+.opt-btn.selected { border-color:#ffc800; }
+.scoreboard { width:100%;background:#0a0f1a;border:1px solid rgba(255,200,0,0.15);
+  border-radius:10px;padding:14px; }
+.scoreboard h3 { font-family:'Orbitron',monospace;font-size:12px;color:rgba(255,200,0,0.6);
+  letter-spacing:2px;margin-bottom:10px; }
+.score-row { display:flex;justify-content:space-between;align-items:center;
+  padding:6px 0;border-bottom:1px solid rgba(255,200,0,0.06); }
+.score-row:last-child{border-bottom:none;}
+.score-name { font-size:15px;font-weight:700; }
+.score-pts  { font-family:'Orbitron',monospace;font-size:14px;color:#ffc800; }
+.feedback { font-family:'Orbitron',monospace;font-size:16px;text-align:center;min-height:24px; }
+.feedback.correct { color:#00ff66; }
+.feedback.wrong   { color:#ff4444; }
+
+/* Result overlay */
+.overlay { position:fixed;inset:0;background:rgba(5,7,15,0.93);display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:100;backdrop-filter:blur(6px); }
+.overlay.show{display:flex;}
+.overlay h2 { font-family:'Orbitron',monospace;font-size:30px;letter-spacing:4px;color:#ffc800; }
+.overlay p  { color:rgba(224,240,255,0.55);font-size:15px;text-align:center; }
+.ov-scores  { display:flex;flex-direction:column;gap:8px;width:260px; }
+.ov-score-row { display:flex;justify-content:space-between;
+  font-family:'Orbitron',monospace;font-size:14px;padding:8px 14px;
+  background:rgba(255,200,0,0.06);border-radius:8px; }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="/games">← Back</a>
+  <h1>TRIVIA</h1>
+  <div class="room-tag" id="room-tag"></div>
+</header>
+<main>
+  <div class="lobby" id="lobby">
+    <div class="players-list">
+      <h3>Players</h3>
+      <div id="player-list"></div>
+    </div>
+    <div class="hint" id="lobby-hint">Waiting for players...</div>
+    <button class="start-btn" id="start-btn" disabled onclick="startGame()">Start Game</button>
+  </div>
+  <div class="game" id="game">
+    <div class="round-info" id="round-info">Round 1 / 10</div>
+    <div class="timer-bar"><div class="timer-fill" id="timer-fill"></div></div>
+    <div class="question-box">
+      <div class="question-text" id="question-text">—</div>
+    </div>
+    <div class="options" id="options"></div>
+    <div class="feedback" id="feedback"></div>
+    <div class="scoreboard">
+      <h3>Scores</h3>
+      <div id="score-list"></div>
+    </div>
+  </div>
+</main>
+<div class="overlay" id="overlay">
+  <h2 id="ov-title">GAME OVER</h2>
+  <p id="ov-msg"></p>
+  <div class="ov-scores" id="ov-scores"></div>
+  <button class="start-btn" onclick="location.reload()">Play Again</button>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const roomId = params.get('room') || 'TRV1';
+const myName = decodeURIComponent(params.get('name') || 'Player');
+document.getElementById('room-tag').textContent = 'ROOM: ' + roomId;
+
+let isHost = false;
+let players = [];
+let timerInterval = null;
+let answered = false;
+
+const wsProto = location.protocol==='https:'?'wss':'ws';
+const ws = new WebSocket(`${wsProto}://${location.host}/ws`);
+ws.onopen  = () => ws.send(JSON.stringify({type:'join',room:roomId,name:myName,game:'trivia'}));
+ws.onmessage = e => handleMsg(JSON.parse(e.data));
+ws.onclose   = () => { document.getElementById('lobby-hint').textContent = 'Disconnected. Please refresh.'; };
+
+function send(obj) { if(ws.readyState===1) ws.send(JSON.stringify(obj)); }
+
+function handleMsg(msg) {
+  switch(msg.type) {
+    case 'joined':
+      isHost = msg.isHost;
+      updateLobby(msg.players);
+      break;
+    case 'player_joined':
+    case 'player_left':
+      updateLobby(msg.players);
+      break;
+    case 'waiting':
+      document.getElementById('lobby-hint').textContent = msg.message;
+      document.getElementById('start-btn').disabled = !msg.canStart || !isHost;
+      break;
+    case 'trivia_start':
+      document.getElementById('lobby').style.display = 'none';
+      document.getElementById('game').style.display = 'flex';
+      break;
+    case 'trivia_question':
+      showQuestion(msg);
+      break;
+    case 'trivia_ack':
+      document.getElementById('feedback').textContent = msg.correct
+        ? `✓ Correct! +${msg.points} pts`
+        : '✗ Wrong!';
+      document.getElementById('feedback').className = 'feedback ' + (msg.correct ? 'correct' : 'wrong');
+      break;
+    case 'trivia_reveal':
+      revealAnswers(msg);
+      break;
+    case 'game_over':
+      showResults(msg);
+      break;
+  }
+}
+
+function updateLobby(p) {
+  players = p;
+  const list = document.getElementById('player-list');
+  list.innerHTML = p.map(pl =>
+    `<div class="player-row"><div class="player-dot"></div><div class="player-name">${pl.name}</div></div>`
+  ).join('');
+  const hint = document.getElementById('lobby-hint');
+  if (isHost) {
+    hint.textContent = p.length >= 2 ? 'Ready! Press Start.' : 'Waiting for more players...';
+    document.getElementById('start-btn').disabled = p.length < 2;
+  } else {
+    hint.textContent = 'Waiting for host to start...';
+    document.getElementById('start-btn').disabled = true;
+  }
+}
+
+function startGame() {
+  send({type:'start_game'});
+}
+
+function showQuestion(msg) {
+  answered = false;
+  document.getElementById('round-info').textContent = `Round ${msg.round} / ${msg.total}`;
+  document.getElementById('question-text').textContent = msg.question;
+  document.getElementById('feedback').textContent = '';
+  document.getElementById('feedback').className = 'feedback';
+
+  // Timer bar
+  clearInterval(timerInterval);
+  let t = msg.timeLimit;
+  const fill = document.getElementById('timer-fill');
+  fill.style.transition = 'none';
+  fill.style.width = '100%';
+  setTimeout(() => {
+    fill.style.transition = `width ${t}s linear`;
+    fill.style.width = '0%';
+  }, 50);
+
+  // Options
+  const opts = document.getElementById('options');
+  opts.innerHTML = '';
+  msg.options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'opt-btn';
+    btn.textContent = opt;
+    btn.onclick = () => {
+      if (answered) return;
+      answered = true;
+      btn.classList.add('selected');
+      document.querySelectorAll('.opt-btn').forEach(b => b.disabled = true);
+      send({type:'trivia_answer', answer: opt});
+    };
+    opts.appendChild(btn);
+  });
+}
+
+function revealAnswers(msg) {
+  clearInterval(timerInterval);
+  const fill = document.getElementById('timer-fill');
+  fill.style.transition = 'none';
+  fill.style.width = '0%';
+
+  document.querySelectorAll('.opt-btn').forEach(btn => {
+    btn.disabled = true;
+    if (btn.textContent === msg.correct) btn.classList.add('correct');
+    else if (btn.classList.contains('selected')) btn.classList.add('wrong');
+  });
+
+  // Scoreboard
+  const list = document.getElementById('score-list');
+  list.innerHTML = [...msg.players]
+    .sort((a,b)=>b.score-a.score)
+    .map(p=>`<div class="score-row">
+      <span class="score-name">${p.name}${p.name===myName?' (you)':''}</span>
+      <span class="score-pts">${p.score}</span>
+    </div>`).join('');
+}
+
+function showResults(msg) {
+  const won = msg.winner === myName;
+  document.getElementById('ov-title').textContent = won ? '🏆 YOU WIN!' : 'GAME OVER';
+  document.getElementById('ov-title').style.color = won ? '#00ff88' : '#ffc800';
+  document.getElementById('ov-msg').textContent = `Winner: ${msg.winner}`;
+  const scores = document.getElementById('ov-scores');
+  scores.innerHTML = [...msg.players]
+    .sort((a,b)=>b.score-a.score)
+    .map((p,i)=>`<div class="ov-score-row">
+      <span>${i===0?'🥇':i===1?'🥈':'🥉'} ${p.name}</span>
+      <span>${p.score}</span>
+    </div>`).join('');
+  document.getElementById('overlay').classList.add('show');
+}
+</script>
+</body>
+</html>

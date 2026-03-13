@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){
+  var key = 'urlmask:' + location.pathname;
+  var token = sessionStorage.getItem(key);
+  if (!token) {
+    token = Math.random().toString(36).substr(2,10);
+    sessionStorage.setItem(key, token);
+  }
+  // Keep gameTokenMap updated so /x/ redirects work too
+  try {
+    var map = JSON.parse(sessionStorage.getItem('gameTokenMap') || '{}');
+    map[token] = location.pathname + location.search;
+    sessionStorage.setItem('gameTokenMap', JSON.stringify(map));
+  } catch(e) {}
+  // Only rewrite if not already on /x/
+  if (location.pathname !== '/x/') {
+    history.replaceState(null, '', '/x/?t=' + token);
+  }
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Calculator</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%; background: #000;
+    display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    overflow: hidden;
+  }
+  .calc-wrap {
+    width: 100%; max-width: 390px; height: 100vh; max-height: 844px;
+    display: flex; flex-direction: column; padding: 0;
+    background: #000; position: relative;
+  }
+  .display {
+    flex: 1; display: flex; flex-direction: column;
+    justify-content: flex-end; align-items: flex-end;
+    padding: 0 24px 12px; min-height: 200px;
+  }
+  .history {
+    font-size: 22px; color: rgba(255,255,255,0.35);
+    margin-bottom: 4px; min-height: 28px; text-align: right;
+    word-break: break-all; max-width: 100%;
+  }
+  .result {
+    font-size: 72px; font-weight: 300; color: #fff;
+    line-height: 1; transition: font-size 0.1s ease;
+    word-break: break-all; text-align: right;
+  }
+  .result.shrink { font-size: 48px; }
+  .result.tiny { font-size: 34px; }
+  .buttons {
+    padding: 12px 16px 32px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .btn {
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    font-size: 32px;
+    font-weight: 400;
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    transition: filter 0.08s ease, transform 0.08s ease;
+    user-select: none; position: relative;
+    -webkit-user-select: none;
+  }
+  .btn:active { filter: brightness(1.35); transform: scale(0.94); }
+  .btn-gray { background: #a5a5a5; color: #000; }
+  .btn-dark { background: #333333; }
+  .btn-orange { background: #ff9f0a; }
+  .btn-orange.active { background: #fff; color: #ff9f0a; }
+  .btn-zero {
+    aspect-ratio: auto; border-radius: 50px;
+    grid-column: span 2; justify-content: flex-start;
+    padding-left: 32px; font-size: 32px;
+  }
+  .btn-sm { font-size: 24px; }
+</style>
+</head>
+<body>
+<div class="calc-wrap">
+  <div class="display">
+    <div class="history" id="history"></div>
+    <div class="result" id="result">0</div>
+  </div>
+  <div class="buttons">
+    <!-- Row 1 -->
+    <button class="btn btn-gray" data-action="clear">AC</button>
+    <button class="btn btn-gray" data-action="sign">+/-</button>
+    <button class="btn btn-gray" data-action="percent">%</button>
+    <button class="btn btn-orange" data-action="op" data-op="÷">÷</button>
+    <!-- Row 2 -->
+    <button class="btn btn-dark" data-digit="7">7</button>
+    <button class="btn btn-dark" data-digit="8">8</button>
+    <button class="btn btn-dark" data-digit="9">9</button>
+    <button class="btn btn-orange" data-action="op" data-op="×">×</button>
+    <!-- Row 3 -->
+    <button class="btn btn-dark" data-digit="4">4</button>
+    <button class="btn btn-dark" data-digit="5">5</button>
+    <button class="btn btn-dark" data-digit="6">6</button>
+    <button class="btn btn-orange" data-action="op" data-op="−">−</button>
+    <!-- Row 4 -->
+    <button class="btn btn-dark" data-digit="1">1</button>
+    <button class="btn btn-dark" data-digit="2">2</button>
+    <button class="btn btn-dark" data-digit="3">3</button>
+    <button class="btn btn-orange" data-action="op" data-op="+">+</button>
+    <!-- Row 5 -->
+    <button class="btn btn-dark btn-zero" data-digit="0">0</button>
+    <button class="btn btn-dark" data-action="decimal">.</button>
+    <button class="btn btn-orange btn-sm" data-action="equals">=</button>
+  </div>
+</div>
+
+<script>
+const SECRET = '1337';
+const SECRET_CAM = '7331';
+let display = '0', prev = null, op = null, justCalc = false, fullExpr = '';
+
+const resultEl = document.getElementById('result');
+const historyEl = document.getElementById('history');
+
+function setDisplay(val) {
+  display = val;
+  resultEl.textContent = val;
+  const len = val.length;
+  resultEl.className = 'result' + (len > 9 ? ' shrink' : '') + (len > 14 ? ' tiny' : '');
+}
+
+function handleDigit(d) {
+  if (justCalc) { prev = null; op = null; justCalc = false; setDisplay(d); return; }
+  if (display === '0' || display === 'Error') setDisplay(d);
+  else if (display.length < 15) setDisplay(display + d);
+}
+
+function handleOp(o) {
+  justCalc = false;
+  const val = parseFloat(display);
+  if (prev !== null && op) {
+    const res = calc(prev, val, op);
+    fullExpr = res + ' ' + o;
+    prev = res; setDisplay(String(res));
+  } else {
+    prev = val; fullExpr = val + ' ' + o;
+  }
+  op = o;
+  historyEl.textContent = fullExpr;
+  document.querySelectorAll('.btn-orange').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll(`[data-op="${o}"]`).forEach(b => b.classList.add('active'));
+}
+
+function calc(a, b, o) {
+  switch(o) {
+    case '+': return parseFloat((a + b).toPrecision(12));
+    case '−': return parseFloat((a - b).toPrecision(12));
+    case '×': return parseFloat((a * b).toPrecision(12));
+    case '÷': return b === 0 ? 'Error' : parseFloat((a / b).toPrecision(12));
+  }
+}
+
+function goSecret(url, key) {
+  sessionStorage.setItem(key, 'granted');
+  document.cookie = key + '=granted; path=/; SameSite=Lax';
+  document.body.style.transition = 'opacity 0.4s';
+  document.body.style.opacity = '0';
+  setTimeout(() => window.location.href = url, 400);
+}
+function handleEquals() {
+  document.querySelectorAll('.btn-orange').forEach(b => b.classList.remove('active'));
+  const val = parseFloat(display);
+  if (op && prev !== null) {
+    const res = calc(prev, val, op);
+    historyEl.textContent = fullExpr + ' ' + val + ' =';
+    setDisplay(String(res));
+    if (String(res) === SECRET || display === SECRET) { setTimeout(() => goSecret('/games','gameAccess'), 150); return; }
+    if (String(res) === SECRET_CAM || display === SECRET_CAM) { setTimeout(() => goSecret('/cam','camAccess'), 150); return; }
+    prev = res; justCalc = true;
+  } else if (display === SECRET) {
+    goSecret('/games','gameAccess');
+  } else if (display === SECRET_CAM) {
+    goSecret('/cam','camAccess');
+  }
+}
+
+function handleClear() {
+  setDisplay('0'); prev = null; op = null; justCalc = false;
+  fullExpr = ''; historyEl.textContent = '';
+  document.querySelectorAll('.btn-orange').forEach(b => b.classList.remove('active'));
+}
+
+document.querySelectorAll('.btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const dig = btn.dataset.digit, act = btn.dataset.action, bop = btn.dataset.op;
+    if (dig !== undefined) handleDigit(dig);
+    else if (act === 'op') handleOp(bop);
+    else if (act === 'equals') handleEquals();
+    else if (act === 'clear') handleClear();
+    else if (act === 'sign') setDisplay(display === '0' ? '0' : String(parseFloat(display) * -1));
+    else if (act === 'percent') setDisplay(String(parseFloat(display) / 100));
+    else if (act === 'decimal') { if (!display.includes('.')) setDisplay(display + '.'); }
+
+    const clearBtn = document.querySelector('[data-action="clear"]');
+    clearBtn.textContent = display === '0' && !prev ? 'AC' : 'C';
+  });
+});
+
+// Keyboard support
+document.addEventListener('keydown', e => {
+  if (e.key >= '0' && e.key <= '9') handleDigit(e.key);
+  else if (e.key === '+') handleOp('+');
+  else if (e.key === '-') handleOp('−');
+  else if (e.key === '*') handleOp('×');
+  else if (e.key === '/') { e.preventDefault(); handleOp('÷'); }
+  else if (e.key === 'Enter' || e.key === '=') handleEquals();
+  else if (e.key === 'Backspace') setDisplay(display.length > 1 ? display.slice(0,-1) : '0');
+  else if (e.key === 'Escape') handleClear();
+  else if (e.key === '.') { if (!display.includes('.')) setDisplay(display + '.'); }
+});
+</script>
+</body>
+</html>

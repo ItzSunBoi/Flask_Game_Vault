@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){
+  var key = 'urlmask:' + location.pathname;
+  var token = sessionStorage.getItem(key);
+  if (!token) {
+    token = Math.random().toString(36).substr(2,10);
+    sessionStorage.setItem(key, token);
+  }
+  // Keep gameTokenMap updated so /x/ redirects work too
+  try {
+    var map = JSON.parse(sessionStorage.getItem('gameTokenMap') || '{}');
+    map[token] = location.pathname + location.search;
+    sessionStorage.setItem('gameTokenMap', JSON.stringify(map));
+  } catch(e) {}
+  // Only rewrite if not already on /x/
+  if (location.pathname !== '/x/') {
+    history.replaceState(null, '', '/x/?t=' + token);
+  }
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chess — GameVault</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#05070f;color:#e0f0ff;font-family:'Rajdhani',sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh;}
+  header{width:100%;padding:16px 24px;border-bottom:1px solid rgba(0,204,68,0.2);display:flex;align-items:center;gap:16px;}
+  .back{color:rgba(0,204,68,0.7);text-decoration:none;font-size:13px;letter-spacing:1px;text-transform:uppercase;font-family:'Orbitron',monospace;}
+  header h1{font-family:'Orbitron',monospace;font-size:20px;color:#00cc44;letter-spacing:3px;}
+  .layout{display:flex;gap:20px;padding:20px;flex-wrap:wrap;justify-content:center;align-items:flex-start;}
+  .board-wrap{position:relative;}
+  #board{display:grid;grid-template-columns:repeat(8,62px);grid-template-rows:repeat(8,62px);border:2px solid rgba(0,204,68,0.3);box-shadow:0 0 30px rgba(0,204,68,0.1);}
+  .sq{width:62px;height:62px;display:flex;align-items:center;justify-content:center;font-size:40px;cursor:pointer;position:relative;user-select:none;transition:background .1s;}
+  .sq.light{background:#1a2e1a;}
+  .sq.dark{background:#0d1a0d;}
+  .sq.selected{background:rgba(0,255,100,0.4)!important;}
+  .sq.legal{background:rgba(0,255,100,0.2)!important;}
+  .sq.legal::after{content:'';position:absolute;width:24px;height:24px;border-radius:50%;background:rgba(0,255,100,0.5);}
+  .sq.last{outline:2px solid rgba(255,220,0,0.5);outline-offset:-2px;}
+  .sq.check{background:rgba(255,30,30,0.5)!important;}
+  .coords-file{display:flex;padding:0 2px;}
+  .coords-file span{width:62px;text-align:center;font-size:11px;color:rgba(0,204,68,0.4);font-family:'Orbitron',monospace;}
+  .sidebar{width:220px;display:flex;flex-direction:column;gap:14px;}
+  .panel{background:#0d1426;border:1px solid rgba(0,204,68,0.15);border-radius:10px;padding:14px;}
+  .panel-title{font-family:'Orbitron',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:rgba(224,240,255,0.4);margin-bottom:8px;}
+  .room-code{font-family:'Orbitron',monospace;font-size:24px;font-weight:900;color:#00cc44;letter-spacing:4px;}
+  .status{font-size:15px;color:#e0f0ff;line-height:1.5;}
+  .status .highlight{color:#00cc44;font-weight:700;}
+  .move-list{max-height:200px;overflow-y:auto;font-size:13px;color:rgba(224,240,255,0.6);}
+  .move-list::-webkit-scrollbar{width:4px;} .move-list::-webkit-scrollbar-thumb{background:rgba(0,204,68,0.3);}
+  .move-pair{display:flex;gap:8px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
+  .move-num{color:rgba(224,240,255,0.3);width:24px;}
+  .move-w,.move-b{flex:1;cursor:pointer;padding:1px 4px;border-radius:3px;}
+  .move-w:hover,.move-b:hover{background:rgba(0,204,68,0.1);}
+  .btn{width:100%;background:#00cc44;color:#000;border:none;padding:11px;border-radius:8px;font-family:'Orbitron',monospace;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:opacity .2s;margin-top:4px;}
+  .btn:hover{opacity:.85} .btn.secondary{background:#333;color:#e0f0ff;}
+  .waiting{display:flex;align-items:center;gap:8px;font-size:14px;color:rgba(224,240,255,0.5);}
+  .spin{width:14px;height:14px;border:2px solid rgba(0,204,68,0.3);border-top-color:#00cc44;border-radius:50%;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .promo-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:100;align-items:center;justify-content:center;}
+  .promo-modal.show{display:flex;}
+  .promo-box{background:#0d1426;border:1px solid rgba(0,204,68,0.3);border-radius:14px;padding:24px;display:flex;gap:16px;}
+  .promo-piece{font-size:48px;cursor:pointer;padding:8px;border-radius:8px;transition:background .15s;}
+  .promo-piece:hover{background:rgba(0,204,68,0.2);}
+  @media(max-width:600px){#board{grid-template-columns:repeat(8,42px);grid-template-rows:repeat(8,42px);}.sq{width:42px;height:42px;font-size:26px;}.coords-file span{width:42px;}}
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="/games">← Back</a>
+  <h1>CHESS</h1>
+</header>
+<div class="layout">
+  <div>
+    <div class="board-wrap">
+      <div id="board"></div>
+    </div>
+    <div class="coords-file" id="files"></div>
+  </div>
+  <div class="sidebar">
+    <div class="panel">
+      <div class="panel-title">Room</div>
+      <div class="room-code" id="room-code">---</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Status</div>
+      <div class="status" id="status"><div class="waiting"><div class="spin"></div>Connecting...</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Move History</div>
+      <div class="move-list" id="move-list"></div>
+    </div>
+    <button class="btn secondary" onclick="copyRoom()">Copy Room Link</button>
+    <button class="btn secondary" onclick="window.location='/games'">Back to Portal</button>
+  </div>
+</div>
+
+<div class="promo-modal" id="promo">
+  <div class="promo-box">
+    <div class="promo-piece" onclick="promote('q')">♛</div>
+    <div class="promo-piece" onclick="promote('r')">♜</div>
+    <div class="promo-piece" onclick="promote('b')">♝</div>
+    <div class="promo-piece" onclick="promote('n')">♞</div>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const roomId = params.get('room') || Math.random().toString(36).substr(2,6).toUpperCase();
+const playerName = params.get('name') || localStorage.getItem('playerName') || 'Player';
+
+document.getElementById('room-code').textContent = roomId;
+
+const PIECES = {
+  'wK':'♔','wQ':'♕','wR':'♖','wB':'♗','wN':'♘','wP':'♙',
+  'bK':'♚','bQ':'♛','bR':'♜','bB':'♝','bN':'♞','bP':'♟'
+};
+
+let chess = new Chess();
+let myColor = null, selected = null, legalMoves = [], lastMove = null;
+let pendingPromo = null, ws = null;
+
+function buildBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  const files = document.getElementById('files');
+  files.innerHTML = '';
+  const labels = myColor === 'b' ? ['h','g','f','e','d','c','b','a'] : ['a','b','c','d','e','f','g','h'];
+  labels.forEach(l => { const s = document.createElement('span'); s.textContent = l; files.appendChild(s); });
+  
+  const rows = myColor === 'b' ? [1,2,3,4,5,6,7,8] : [8,7,6,5,4,3,2,1];
+  const cols = myColor === 'b' ? ['h','g','f','e','d','c','b','a'] : ['a','b','c','d','e','f','g','h'];
+  
+  rows.forEach(rank => {
+    cols.forEach(file => {
+      const sq = document.createElement('div');
+      const sqName = file + rank;
+      sq.className = 'sq ' + (((file.charCodeAt(0) - 97) + rank) % 2 === 0 ? 'dark' : 'light');
+      sq.dataset.sq = sqName;
+      
+      const piece = chess.get(sqName);
+      if (piece) sq.textContent = PIECES[(piece.color === 'w' ? 'w' : 'b') + piece.type.toUpperCase()];
+      
+      if (selected === sqName) sq.classList.add('selected');
+      if (legalMoves.includes(sqName)) sq.classList.add('legal');
+      if (lastMove && (lastMove.from === sqName || lastMove.to === sqName)) sq.classList.add('last');
+      
+      const kingPos = findKing(chess.turn());
+      if (chess.in_check() && sqName === kingPos) sq.classList.add('check');
+      
+      sq.addEventListener('click', () => onSquareClick(sqName));
+      board.appendChild(sq);
+    });
+  });
+}
+
+function findKing(color) {
+  const board = chess.board();
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = board[r][c];
+    if (p && p.type === 'k' && p.color === color) {
+      return 'abcdefgh'[c] + (8-r);
+    }
+  }
+}
+
+function onSquareClick(sqName) {
+  if (!myColor) return;
+  if (chess.turn() !== myColor[0]) { setStatus('Not your turn'); return; }
+  
+  if (selected) {
+    if (legalMoves.includes(sqName)) {
+      const piece = chess.get(selected);
+      const isPromo = piece && piece.type === 'p' && 
+        ((myColor === 'w' && sqName[1] === '8') || (myColor === 'b' && sqName[1] === '1'));
+      if (isPromo) { pendingPromo = { from: selected, to: sqName }; document.getElementById('promo').classList.add('show'); return; }
+      makeMove(selected, sqName);
+    } else {
+      selected = null; legalMoves = [];
+      const piece = chess.get(sqName);
+      if (piece && piece.color === myColor[0]) {
+        selected = sqName;
+        legalMoves = chess.moves({ square: sqName, verbose: true }).map(m => m.to);
+      }
+      buildBoard();
+    }
+  } else {
+    const piece = chess.get(sqName);
+    if (piece && piece.color === myColor[0]) {
+      selected = sqName;
+      legalMoves = chess.moves({ square: sqName, verbose: true }).map(m => m.to);
+      buildBoard();
+    }
+  }
+}
+
+function promote(piece) {
+  document.getElementById('promo').classList.remove('show');
+  if (pendingPromo) { makeMove(pendingPromo.from, pendingPromo.to, piece); pendingPromo = null; }
+}
+
+function makeMove(from, to, promo) {
+  const move = chess.move({ from, to, promotion: promo || 'q' });
+  if (!move) return;
+  lastMove = { from, to };
+  selected = null; legalMoves = [];
+  ws && ws.send(JSON.stringify({ type: 'chess_move', room: roomId, from, to, promotion: promo || 'q', fen: chess.fen() }));
+  buildBoard(); updateStatus(); updateMoveList();
+}
+
+function updateStatus() {
+  let msg = '';
+  if (chess.in_checkmate()) msg = `<span class="highlight">Checkmate!</span> ${chess.turn() === 'w' ? 'Black' : 'White'} wins!`;
+  else if (chess.in_stalemate()) msg = 'Stalemate — Draw';
+  else if (chess.in_draw()) msg = 'Draw!';
+  else if (chess.in_check()) msg = `<span class="highlight">Check!</span> ${chess.turn() === 'w' ? 'White' : 'Black'} to move`;
+  else msg = `${chess.turn() === 'w' ? 'White' : 'Black'} to move` + (myColor ? ` ${chess.turn() === myColor[0] ? '— <span class="highlight">YOUR TURN</span>' : ''}` : '');
+  setStatus(msg);
+}
+
+function setStatus(html) { document.getElementById('status').innerHTML = html; }
+
+function updateMoveList() {
+  const history = chess.history();
+  const ml = document.getElementById('move-list');
+  let html = '';
+  for (let i = 0; i < history.length; i += 2) {
+    html += `<div class="move-pair"><span class="move-num">${i/2+1}.</span><span class="move-w">${history[i]}</span><span class="move-b">${history[i+1]||''}</span></div>`;
+  }
+  ml.innerHTML = html; ml.scrollTop = ml.scrollHeight;
+}
+
+function copyRoom() {
+  const url = `${location.origin}/chess/?room=${roomId}&name=${encodeURIComponent(playerName)}`;
+  navigator.clipboard.writeText(url).then(() => alert('Room link copied!')).catch(() => alert(url));
+}
+
+// WebSocket
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'join', room: roomId, name: playerName, game: 'chess' }));
+  };
+  ws.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.type === 'joined') {
+      myColor = d.color;
+      setStatus(`You are <span class="highlight">${myColor === 'w' ? 'White' : 'Black'}</span> — waiting for opponent...`);
+      buildBoard();
+    }
+    if (d.type === 'game_start') {
+      setStatus(`Game started! ${chess.turn() === myColor[0] ? '<span class="highlight">YOUR TURN</span>' : "Opponent's turn"}`);
+      buildBoard();
+    }
+    if (d.type === 'chess_move') {
+      chess.move({ from: d.from, to: d.to, promotion: d.promotion || 'q' });
+      lastMove = { from: d.from, to: d.to };
+      selected = null; legalMoves = [];
+      buildBoard(); updateStatus(); updateMoveList();
+    }
+    if (d.type === 'opponent_left') {
+      setStatus('<span class="highlight">Opponent disconnected.</span>');
+    }
+    if (d.type === 'error') setStatus(d.message);
+  };
+  ws.onclose = () => { setTimeout(connect, 3000); };
+}
+
+connect();
+buildBoard();
+</script>
+</body>
+</html>

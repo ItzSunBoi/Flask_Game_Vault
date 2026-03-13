@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){
+  var key = 'urlmask:' + location.pathname;
+  var token = sessionStorage.getItem(key);
+  if (!token) {
+    token = Math.random().toString(36).substr(2,10);
+    sessionStorage.setItem(key, token);
+  }
+  // Keep gameTokenMap updated so /x/ redirects work too
+  try {
+    var map = JSON.parse(sessionStorage.getItem('gameTokenMap') || '{}');
+    map[token] = location.pathname + location.search;
+    sessionStorage.setItem('gameTokenMap', JSON.stringify(map));
+  } catch(e) {}
+  // Only rewrite if not already on /x/
+  if (location.pathname !== '/x/') {
+    history.replaceState(null, '', '/x/?t=' + token);
+  }
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Flapty — GameVault</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0;padding:0;box-sizing:border-box; }
+body { background:#05070f;color:#e0f0ff;font-family:'Rajdhani',sans-serif;
+  display:flex;flex-direction:column;align-items:center;min-height:100vh;overflow:hidden; }
+header { width:100%;padding:14px 24px;border-bottom:1px solid rgba(0,170,255,0.2);
+  display:flex;align-items:center;gap:16px; }
+.back { color:rgba(0,170,255,0.7);text-decoration:none;font-size:13px;letter-spacing:1px;
+  text-transform:uppercase;font-family:'Orbitron',monospace; }
+header h1 { font-family:'Orbitron',monospace;font-size:20px;color:#00aaff;letter-spacing:3px; }
+.game-wrap { position:relative;margin-top:16px; }
+canvas { display:block;border-radius:12px;border:2px solid rgba(0,170,255,0.2);
+  box-shadow:0 0 30px rgba(0,170,255,0.08); }
+.overlay { position:absolute;inset:0;border-radius:12px;background:rgba(5,7,15,0.88);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  backdrop-filter:blur(4px); }
+.overlay h2 { font-family:'Orbitron',monospace;font-size:28px;letter-spacing:3px;color:#00aaff; }
+.overlay .score-big { font-family:'Orbitron',monospace;font-size:48px;font-weight:900;color:#fff; }
+.overlay p { color:rgba(224,240,255,0.55);font-size:15px; }
+.play-btn { background:#00aaff;color:#000;border:none;padding:12px 28px;border-radius:8px;
+  font-family:'Orbitron',monospace;font-size:13px;font-weight:700;cursor:pointer;
+  letter-spacing:1px;text-transform:uppercase;transition:opacity .2s;margin-top:4px; }
+.play-btn:hover{opacity:.85}
+.hiscore { font-family:'Orbitron',monospace;font-size:13px;color:rgba(0,170,255,0.6); }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="/games">← Back</a>
+  <h1>FLAPTY</h1>
+</header>
+<div class="game-wrap">
+  <canvas id="c" width="360" height="500"></canvas>
+  <div class="overlay" id="overlay">
+    <h2 id="ov-title">FLAPTY</h2>
+    <div class="score-big" id="ov-score" style="display:none">0</div>
+    <p id="ov-msg">Tap or press Space to flap</p>
+    <p class="hiscore" id="ov-best"></p>
+    <button class="play-btn" onclick="startGame()">Play</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+const GRAVITY = 0.38;
+const FLAP    = -7.2;
+const PIPE_W  = 52;
+const GAP     = 140;
+const PIPE_SPEED = 2.4;
+
+let bird, pipes, score, hiScore, frame, running, animId;
+
+hiScore = parseInt(localStorage.getItem('flapty-hi') || '0');
+
+function Bird() {
+  return { x:80, y:H/2, vy:0, r:14 };
+}
+
+function Pipe(x) {
+  const top = 60 + Math.random() * (H - GAP - 120);
+  return { x, top, bottom: top + GAP, scored: false };
+}
+
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  bird = Bird();
+  pipes = [Pipe(W + 100), Pipe(W + 100 + 220)];
+  score = 0; frame = 0; running = true;
+  cancelAnimationFrame(animId);
+  loop();
+}
+
+function flap() {
+  if (!running) return;
+  bird.vy = FLAP;
+}
+
+function loop() {
+  animId = requestAnimationFrame(loop);
+  frame++;
+  update();
+  draw();
+}
+
+function update() {
+  bird.vy += GRAVITY;
+  bird.y  += bird.vy;
+
+  // Move pipes
+  for (const p of pipes) p.x -= PIPE_SPEED;
+
+  // Recycle pipes
+  if (pipes[0].x + PIPE_W < 0) {
+    pipes.shift();
+    pipes.push(Pipe(pipes[pipes.length-1].x + 220));
+  }
+
+  // Score
+  for (const p of pipes) {
+    if (!p.scored && p.x + PIPE_W < bird.x - bird.r) {
+      p.scored = true; score++;
+    }
+  }
+
+  // Collision
+  if (bird.y + bird.r > H || bird.y - bird.r < 0) { die(); return; }
+  for (const p of pipes) {
+    if (bird.x + bird.r > p.x && bird.x - bird.r < p.x + PIPE_W) {
+      if (bird.y - bird.r < p.top || bird.y + bird.r > p.bottom) { die(); return; }
+    }
+  }
+}
+
+function die() {
+  running = false;
+  cancelAnimationFrame(animId);
+  if (score > hiScore) { hiScore = score; localStorage.setItem('flapty-hi', hiScore); }
+  setTimeout(showDead, 300);
+}
+
+function showDead() {
+  const ov = document.getElementById('overlay');
+  ov.style.display = 'flex';
+  document.getElementById('ov-title').textContent = score > 0 ? (score >= hiScore ? '🏆 NEW BEST!' : 'DEAD') : 'DEAD';
+  document.getElementById('ov-score').style.display = 'block';
+  document.getElementById('ov-score').textContent = score;
+  document.getElementById('ov-msg').textContent = 'Tap or press Space to try again';
+  document.getElementById('ov-best').textContent = 'Best: ' + hiScore;
+}
+
+function draw() {
+  // Sky
+  ctx.fillStyle = '#05070f';
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars (static)
+  ctx.fillStyle = 'rgba(200,220,255,0.3)';
+  for (let i = 0; i < 40; i++) {
+    const sx = (i * 137 + 17) % W;
+    const sy = (i * 97 + 31) % (H * 0.7);
+    ctx.fillRect(sx, sy, 1, 1);
+  }
+
+  // Ground
+  ctx.fillStyle = '#0a1a10';
+  ctx.fillRect(0, H - 20, W, 20);
+  ctx.fillStyle = 'rgba(0,200,80,0.3)';
+  ctx.fillRect(0, H - 20, W, 2);
+
+  // Pipes
+  for (const p of pipes) drawPipe(p);
+
+  // Bird
+  drawBird();
+
+  // Score HUD
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 28px Orbitron, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(score, W/2, 48);
+}
+
+function drawPipe(p) {
+  const grad = ctx.createLinearGradient(p.x, 0, p.x + PIPE_W, 0);
+  grad.addColorStop(0, '#0a2a14');
+  grad.addColorStop(0.4, '#0d3a1c');
+  grad.addColorStop(1, '#061508');
+  ctx.fillStyle = grad;
+
+  // Top pipe
+  ctx.beginPath();
+  ctx.roundRect(p.x - 2, 0, PIPE_W + 4, p.top - 8, [0,0,6,6]);
+  ctx.fill();
+  ctx.fillStyle = '#0d3a1c';
+  ctx.beginPath();
+  ctx.roundRect(p.x - 6, p.top - 20, PIPE_W + 12, 20, [4,4,0,0]);
+  ctx.fill();
+
+  ctx.fillStyle = grad;
+  // Bottom pipe
+  ctx.beginPath();
+  ctx.roundRect(p.x - 2, p.bottom + 8, PIPE_W + 4, H - p.bottom - 8, [6,6,0,0]);
+  ctx.fill();
+  ctx.fillStyle = '#0d3a1c';
+  ctx.beginPath();
+  ctx.roundRect(p.x - 6, p.bottom, PIPE_W + 12, 20, [0,0,4,4]);
+  ctx.fill();
+
+  // Highlight stripe
+  ctx.fillStyle = 'rgba(0,255,100,0.06)';
+  ctx.fillRect(p.x + 6, 0, 6, p.top - 8);
+  ctx.fillRect(p.x + 6, p.bottom + 8, 6, H);
+}
+
+function drawBird() {
+  const x = bird.x, y = bird.y, r = bird.r;
+  const tilt = Math.min(Math.max(bird.vy * 3, -30), 60);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(tilt * Math.PI / 180);
+
+  // Body
+  const g = ctx.createRadialGradient(-2, -2, 2, 0, 0, r);
+  g.addColorStop(0, '#00ddff');
+  g.addColorStop(1, '#0066cc');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r, r * 0.85, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Wing
+  ctx.fillStyle = '#0088dd';
+  ctx.beginPath();
+  ctx.ellipse(-2, 3, r*0.6, r*0.35, -0.3, 0, Math.PI*2);
+  ctx.fill();
+
+  // Eye
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(r*0.3, -r*0.2, r*0.28, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(r*0.38, -r*0.2, r*0.14, 0, Math.PI*2);
+  ctx.fill();
+
+  // Beak
+  ctx.fillStyle = '#ffaa00';
+  ctx.beginPath();
+  ctx.moveTo(r*0.7, -r*0.05);
+  ctx.lineTo(r*1.2, r*0.1);
+  ctx.lineTo(r*0.7, r*0.25);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// Controls
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); flap(); }
+});
+canvas.addEventListener('click', flap);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); flap(); }, {passive:false});
+
+// Show initial best
+document.getElementById('ov-best').textContent = hiScore > 0 ? 'Best: ' + hiScore : '';
+</script>
+</body>
+</html>

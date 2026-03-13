@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){
+  var key='urlmask:'+location.pathname,token=sessionStorage.getItem(key);
+  if(!token){token=Math.random().toString(36).substr(2,10);sessionStorage.setItem(key,token);}
+  try{var m=JSON.parse(sessionStorage.getItem('gameTokenMap')||'{}');m[token]=location.pathname+location.search;sessionStorage.setItem('gameTokenMap',JSON.stringify(m));}catch(e){}
+  if(location.pathname!=='/x/')history.replaceState(null,'','/x/?t='+token);
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Bomberman — GameVault</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0;padding:0;box-sizing:border-box; }
+html,body { width:100%;height:100%;overflow:hidden;background:#05070f; }
+body { display:flex;flex-direction:column;align-items:center;font-family:'Rajdhani',sans-serif;color:#e0f0ff; }
+header { width:100%;padding:10px 20px;border-bottom:1px solid rgba(255,120,0,0.2);
+  display:flex;align-items:center;gap:14px;flex-shrink:0; }
+.back { color:rgba(255,120,0,0.7);text-decoration:none;font-size:12px;letter-spacing:1px;
+  text-transform:uppercase;font-family:'Orbitron',monospace; }
+h1 { font-family:'Orbitron',monospace;font-size:18px;color:#ff7800;letter-spacing:3px; }
+.room-tag { margin-left:auto;font-family:'Orbitron',monospace;font-size:11px;color:rgba(255,120,0,0.4); }
+#wrap { position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%; }
+canvas { display:block;image-rendering:pixelated; }
+
+/* HUD */
+#hud { display:flex;gap:12px;padding:6px 14px;justify-content:center;flex-wrap:wrap; }
+.hud-player { display:flex;align-items:center;gap:6px;padding:4px 10px;
+  background:#0d1426;border-radius:8px;border:1px solid rgba(255,255,255,0.08); }
+.hud-dot { width:10px;height:10px;border-radius:50%; }
+.hud-name { font-family:'Orbitron',monospace;font-size:10px;letter-spacing:1px; }
+.hud-dead { opacity:.3;text-decoration:line-through; }
+
+/* Overlay */
+.overlay { position:absolute;inset:0;background:rgba(5,7,15,0.92);display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:16px;backdrop-filter:blur(6px); }
+.overlay.show{display:flex;}
+.overlay h2 { font-family:'Orbitron',monospace;font-size:28px;letter-spacing:4px;color:#ff7800; }
+.overlay p  { color:rgba(224,240,255,0.55);font-size:15px;text-align:center;max-width:340px; }
+.btn { background:#ff7800;color:#000;border:none;padding:12px 28px;border-radius:8px;
+  font-family:'Orbitron',monospace;font-size:12px;font-weight:700;cursor:pointer;
+  letter-spacing:2px;text-transform:uppercase;transition:opacity .2s; }
+.btn:hover{opacity:.85;} .btn:disabled{opacity:.35;cursor:default;}
+.players-pre { display:flex;flex-direction:column;gap:6px;width:240px; }
+.pre-row { display:flex;align-items:center;gap:8px;padding:6px 10px;
+  background:rgba(255,120,0,0.06);border-radius:8px; }
+.pre-dot { width:10px;height:10px;border-radius:50%; }
+.pre-name { font-family:'Orbitron',monospace;font-size:12px; }
+
+/* Mobile controls */
+#dpad { position:absolute;bottom:14px;left:14px;display:none;flex-direction:column;align-items:center;z-index:10; }
+#dpad-mid { display:flex; }
+.dpad-btn { width:50px;height:50px;background:rgba(255,120,0,0.15);border:2px solid rgba(255,120,0,0.3);
+  border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;
+  cursor:pointer;user-select:none;-webkit-user-select:none;transition:background .1s; }
+.dpad-btn:active,.dpad-btn.pressed{background:rgba(255,120,0,0.45);}
+#bomb-btn { position:absolute;bottom:14px;right:14px;width:64px;height:64px;
+  background:rgba(255,120,0,0.2);border:2px solid rgba(255,120,0,0.4);
+  border-radius:50%;display:none;align-items:center;justify-content:center;
+  font-size:28px;cursor:pointer;user-select:none;-webkit-user-select:none;z-index:10; }
+#bomb-btn:active{background:rgba(255,120,0,0.5);}
+@media(max-width:700px),(pointer:coarse){#dpad{display:flex;}#bomb-btn{display:flex;}}
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="/games">← Back</a>
+  <h1>BOMBERMAN</h1>
+  <div class="room-tag" id="room-tag"></div>
+</header>
+<div id="wrap">
+  <div id="hud"></div>
+  <canvas id="c"></canvas>
+  <div id="dpad">
+    <button class="dpad-btn" id="btn-up">▲</button>
+    <div id="dpad-mid">
+      <button class="dpad-btn" id="btn-left">◀</button>
+      <div style="width:50px;height:50px;"></div>
+      <button class="dpad-btn" id="btn-right">▶</button>
+    </div>
+    <button class="dpad-btn" id="btn-down">▼</button>
+  </div>
+  <button id="bomb-btn">💣</button>
+  <div class="overlay show" id="overlay">
+    <h2 id="ov-title">BOMBERMAN</h2>
+    <p id="ov-msg">Place bombs, destroy blocks, eliminate opponents!</p>
+    <div class="players-pre" id="players-pre"></div>
+    <button class="btn" id="start-btn" disabled onclick="sendStart()">Start Game</button>
+    <p style="font-size:12px;color:rgba(255,120,0,0.4);font-family:Orbitron,monospace" id="hint-txt">Waiting for players...</p>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const roomId = params.get('room') || 'BOMB';
+const myName = decodeURIComponent(params.get('name') || 'Player');
+document.getElementById('room-tag').textContent = 'ROOM: ' + roomId;
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const TILE = 40;
+const MAP_W = 15, MAP_H = 13;
+const T_EMPTY = 0, T_WALL = 1, T_BLOCK = 2;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let map = [], players = [], bombs = [], flames = [], powerups = [];
+let myPlayer = null;
+let isHost = false;
+let gameRunning = false;
+const keys = {};
+
+// Movement throttle
+let lastMove = 0;
+const MOVE_DELAY = 130;
+
+// ── Canvas ────────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  const wrap = document.getElementById('wrap');
+  const hud  = document.getElementById('hud');
+  const availH = wrap.clientHeight - hud.offsetHeight - 20;
+  const availW = wrap.clientWidth;
+  const tileW  = Math.floor(Math.min(availW / MAP_W, availH / MAP_H));
+  const tile   = Math.max(24, Math.min(tileW, 48));
+  canvas.width  = MAP_W * tile;
+  canvas.height = MAP_H * tile;
+  canvas.style.width  = canvas.width  + 'px';
+  canvas.style.height = canvas.height + 'px';
+  return tile;
+}
+let TILE_PX = TILE;
+window.addEventListener('resize', () => { TILE_PX = resizeCanvas(); });
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+const wsProto = location.protocol==='https:'?'wss':'ws';
+const ws = new WebSocket(`${wsProto}://${location.host}/ws`);
+ws.onopen    = () => ws.send(JSON.stringify({type:'join',room:roomId,name:myName,game:'bomberman'}));
+ws.onmessage = e => handleMsg(JSON.parse(e.data));
+ws.onclose   = () => document.getElementById('hint-txt').textContent = 'Disconnected. Refresh to reconnect.';
+function send(o) { if(ws.readyState===1) ws.send(JSON.stringify(o)); }
+
+// ── Message handler ───────────────────────────────────────────────────────────
+function handleMsg(msg) {
+  switch(msg.type) {
+    case 'joined':
+      isHost = msg.isHost;
+      updateLobby(msg.players);
+      break;
+    case 'player_joined':
+    case 'player_left':
+      updateLobby(msg.players);
+      break;
+    case 'waiting':
+      document.getElementById('hint-txt').textContent = msg.message;
+      if (isHost) document.getElementById('start-btn').disabled = !msg.canStart;
+      break;
+
+    case 'bomb_start':
+      map      = msg.map;
+      players  = msg.players;
+      bombs    = msg.bombs   || [];
+      flames   = msg.flames  || [];
+      powerups = msg.powerups|| [];
+      myPlayer = players.find(p => p.name === myName);
+      gameRunning = true;
+      TILE_PX = resizeCanvas();
+      document.getElementById('overlay').classList.remove('show');
+      updateHUD();
+      break;
+
+    case 'bomb_state':
+      map      = msg.map;
+      players  = msg.players;
+      bombs    = msg.bombs   || [];
+      flames   = msg.flames  || [];
+      powerups = msg.powerups|| [];
+      myPlayer = players.find(p => p.name === myName);
+      updateHUD();
+      break;
+
+    case 'bomb_moved':
+      const mover = players.find(p => p.name === msg.name);
+      if (mover) { mover.r = msg.r; mover.c = msg.c; }
+      if (msg.powerups) powerups = msg.powerups;
+      break;
+
+    case 'bomb_placed':
+      if (!bombs.find(b=>b.id===msg.id))
+        bombs.push({id:msg.id, r:msg.r, c:msg.c, owner:msg.owner});
+      break;
+
+    case 'bomb_death':
+      const dead = players.find(p => p.name === msg.name);
+      if (dead) dead.alive = false;
+      updateHUD();
+      break;
+
+    case 'bomb_over':
+      gameRunning = false;
+      const won = msg.winner === myName;
+      document.getElementById('ov-title').textContent = won ? '🏆 WINNER!' : msg.winner + ' WINS';
+      document.getElementById('ov-title').style.color = won ? '#00ff88' : '#ff7800';
+      document.getElementById('ov-msg').textContent = '';
+      document.getElementById('players-pre').innerHTML = '';
+      document.getElementById('start-btn').textContent = 'Play Again';
+      document.getElementById('start-btn').disabled = false;
+      document.getElementById('start-btn').onclick = () => location.reload();
+      document.getElementById('hint-txt').textContent = '';
+      document.getElementById('overlay').classList.add('show');
+      break;
+  }
+}
+
+function updateLobby(p) {
+  const pre = document.getElementById('players-pre');
+  const COLORS = ['#ff4488','#44aaff','#44ff88','#ffaa00'];
+  pre.innerHTML = p.map((pl,i) =>
+    `<div class="pre-row">
+      <div class="pre-dot" style="background:${COLORS[i%4]}"></div>
+      <div class="pre-name">${pl.name}${pl.name===myName?' (you)':''}</div>
+    </div>`
+  ).join('');
+  if (isHost) {
+    document.getElementById('start-btn').disabled = p.length < 2;
+    document.getElementById('hint-txt').textContent = p.length>=2 ? 'Ready! Press Start.' : 'Waiting for at least 2 players...';
+  } else {
+    document.getElementById('hint-txt').textContent = 'Waiting for host to start...';
+  }
+}
+
+function sendStart() { send({type:'start_game'}); }
+
+function updateHUD() {
+  const COLORS = ['#ff4488','#44aaff','#44ff88','#ffaa00'];
+  document.getElementById('hud').innerHTML = players.map((p,i) =>
+    `<div class="hud-player ${p.alive?'':'hud-dead'}">
+      <div class="hud-dot" style="background:${p.color||COLORS[i%4]}"></div>
+      <div class="hud-name">${p.name}${p.name===myName?' ◀':''}</div>
+    </div>`
+  ).join('');
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+  if (e.code === 'Space' && gameRunning) placeBomb();
+});
+document.addEventListener('keyup', e => keys[e.code] = false);
+
+function dpad(id, code) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.addEventListener('touchstart', e=>{e.preventDefault();keys[code]=true;btn.classList.add('pressed');},{passive:false});
+  btn.addEventListener('touchend',   e=>{e.preventDefault();keys[code]=false;btn.classList.remove('pressed');},{passive:false});
+  btn.addEventListener('mousedown',  ()=>{keys[code]=true; btn.classList.add('pressed');});
+  btn.addEventListener('mouseup',    ()=>{keys[code]=false;btn.classList.remove('pressed');});
+}
+dpad('btn-up','ArrowUp'); dpad('btn-down','ArrowDown');
+dpad('btn-left','ArrowLeft'); dpad('btn-right','ArrowRight');
+const bombBtn = document.getElementById('bomb-btn');
+bombBtn.addEventListener('touchstart', e=>{e.preventDefault();if(gameRunning)placeBomb();},{passive:false});
+bombBtn.addEventListener('click', ()=>{if(gameRunning)placeBomb();});
+
+// ── Movement ──────────────────────────────────────────────────────────────────
+function tryMove() {
+  if (!gameRunning || !myPlayer || !myPlayer.alive) return;
+  const now = Date.now();
+  if (now - lastMove < MOVE_DELAY) return;
+  let dr=0, dc=0;
+  if (keys['ArrowUp']    || keys['KeyW']) dr=-1;
+  else if (keys['ArrowDown']  || keys['KeyS']) dr=1;
+  else if (keys['ArrowLeft']  || keys['KeyA']) dc=-1;
+  else if (keys['ArrowRight'] || keys['KeyD']) dc=1;
+  if (!dr && !dc) return;
+  const nr = myPlayer.r + dr, nc = myPlayer.c + dc;
+  if (nr<0||nr>=MAP_H||nc<0||nc>=MAP_W) return;
+  if (map[nr][nc]===T_WALL||map[nr][nc]===T_BLOCK) return;
+  if (bombs.some(b=>b.r===nr&&b.c===nc)) return;
+  myPlayer.r = nr; myPlayer.c = nc;
+  lastMove = now;
+  send({type:'bomb_move', r:nr, c:nc});
+}
+
+function placeBomb() {
+  if (!myPlayer || !myPlayer.alive) return;
+  send({type:'bomb_place'});
+}
+
+// ── Draw ──────────────────────────────────────────────────────────────────────
+const COLORS = ['#ff4488','#44aaff','#44ff88','#ffaa00'];
+
+function draw() {
+  if (!map.length) return;
+  const T = TILE_PX;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Tiles
+  for (let r=0;r<MAP_H;r++) for (let c=0;c<MAP_W;c++) {
+    const x=c*T, y=r*T, v=map[r][c];
+    if (v===T_WALL) {
+      ctx.fillStyle='#111820';
+      ctx.fillRect(x,y,T,T);
+      ctx.fillStyle='rgba(0,180,255,0.08)';
+      ctx.fillRect(x,y,T,2);
+      ctx.fillRect(x,y,2,T);
+    } else if (v===T_BLOCK) {
+      ctx.fillStyle='#1a1200';
+      ctx.fillRect(x,y,T,T);
+      ctx.strokeStyle='rgba(255,120,0,0.3)';
+      ctx.lineWidth=1;
+      ctx.strokeRect(x+1,y+1,T-2,T-2);
+      // Brick lines
+      ctx.strokeStyle='rgba(255,120,0,0.15)';
+      ctx.beginPath(); ctx.moveTo(x,y+T/2); ctx.lineTo(x+T,y+T/2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x+T/4,y); ctx.lineTo(x+T/4,y+T/2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x+3*T/4,y+T/2); ctx.lineTo(x+3*T/4,y+T); ctx.stroke();
+    } else {
+      ctx.fillStyle='#080f14';
+      ctx.fillRect(x,y,T,T);
+      // Grid dots
+      ctx.fillStyle='rgba(0,180,255,0.04)';
+      ctx.fillRect(x+T/2-1,y+T/2-1,2,2);
+    }
+  }
+
+  // Flames
+  for (const f of flames) {
+    const x=f.c*T, y=f.r*T;
+    ctx.fillStyle='rgba(255,80,0,0.75)';
+    ctx.fillRect(x+2,y+2,T-4,T-4);
+    ctx.fillStyle='rgba(255,220,0,0.6)';
+    ctx.fillRect(x+T/4,y+T/4,T/2,T/2);
+  }
+
+  // Powerups
+  for (const pu of powerups) {
+    const x=pu.c*T+T/2, y=pu.r*T+T/2;
+    ctx.shadowColor=pu.type==='power'?'#ff4400':'#44aaff';
+    ctx.shadowBlur=8;
+    ctx.font=`${T*0.55}px Arial`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(pu.type==='power'?'🔥':'💣',x,y);
+    ctx.shadowBlur=0;
+  }
+
+  // Bombs
+  for (const b of bombs) {
+    const x=b.c*T+T/2, y=b.r*T+T/2;
+    const pulse = 0.85 + Math.sin(Date.now()*0.008)*0.15;
+    ctx.shadowColor='#ff6600'; ctx.shadowBlur=10;
+    ctx.beginPath();
+    ctx.arc(x,y,T*0.35*pulse,0,Math.PI*2);
+    ctx.fillStyle='#1a0a00'; ctx.fill();
+    ctx.strokeStyle='#ff6600'; ctx.lineWidth=2; ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.font=`${T*0.45}px Arial`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('💣',x,y);
+  }
+
+  // Players
+  for (let i=0;i<players.length;i++) {
+    const p = players[i];
+    if (!p.alive) continue;
+    const x=p.c*T, y=p.r*T;
+    const col = p.color || COLORS[i%4];
+    const isMe = p.name===myName;
+
+    // Shadow
+    ctx.fillStyle='rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(x+T/2,y+T-4,T*0.3,T*0.1,0,0,Math.PI*2); ctx.fill();
+
+    // Body
+    ctx.shadowColor=col; ctx.shadowBlur=isMe?14:6;
+    const bg = ctx.createRadialGradient(x+T/2,y+T*0.45,2,x+T/2,y+T/2,T*0.4);
+    bg.addColorStop(0, col);
+    bg.addColorStop(1, col+'55');
+    ctx.fillStyle=bg;
+    ctx.beginPath(); ctx.ellipse(x+T/2,y+T*0.55,T*0.38,T*0.42,0,0,Math.PI*2); ctx.fill();
+
+    // Head
+    ctx.fillStyle=col;
+    ctx.beginPath(); ctx.arc(x+T/2,y+T*0.28,T*0.25,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+
+    // Eyes
+    ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(x+T*0.42,y+T*0.25,T*0.07,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+T*0.58,y+T*0.25,T*0.07,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#000';
+    ctx.beginPath(); ctx.arc(x+T*0.44,y+T*0.25,T*0.04,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+T*0.60,y+T*0.25,T*0.04,0,Math.PI*2); ctx.fill();
+
+    // Name tag (me only)
+    if (isMe) {
+      ctx.font=`bold ${Math.max(9,T*0.22)}px Orbitron,monospace`;
+      ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillStyle=col; ctx.fillText('YOU',x+T/2,y);
+    }
+  }
+}
+
+// ── Loop ──────────────────────────────────────────────────────────────────────
+function loop() {
+  requestAnimationFrame(loop);
+  tryMove();
+  if (gameRunning) draw();
+}
+
+TILE_PX = resizeCanvas();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

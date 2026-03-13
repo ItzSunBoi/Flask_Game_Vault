@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){
+  var key = 'urlmask:' + location.pathname;
+  var token = sessionStorage.getItem(key);
+  if (!token) {
+    token = Math.random().toString(36).substr(2,10);
+    sessionStorage.setItem(key, token);
+  }
+  // Keep gameTokenMap updated so /x/ redirects work too
+  try {
+    var map = JSON.parse(sessionStorage.getItem('gameTokenMap') || '{}');
+    map[token] = location.pathname + location.search;
+    sessionStorage.setItem('gameTokenMap', JSON.stringify(map));
+  } catch(e) {}
+  // Only rewrite if not already on /x/
+  if (location.pathname !== '/x/') {
+    history.replaceState(null, '', '/x/?t=' + token);
+  }
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pong — GameVault</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0;padding:0;box-sizing:border-box; }
+html,body { width:100%;height:100%;overflow:hidden;background:#05070f; }
+body { display:flex;flex-direction:column;align-items:center;font-family:'Rajdhani',sans-serif;color:#e0f0ff; }
+header { width:100%;padding:10px 20px;border-bottom:1px solid rgba(0,200,255,0.2);
+  display:flex;align-items:center;gap:14px;flex-shrink:0; }
+.back { color:rgba(0,200,255,0.7);text-decoration:none;font-size:12px;letter-spacing:1px;
+  text-transform:uppercase;font-family:'Orbitron',monospace; }
+header h1 { font-family:'Orbitron',monospace;font-size:18px;color:#00c8ff;letter-spacing:3px; }
+.room-info { margin-left:auto;font-family:'Orbitron',monospace;font-size:11px;color:rgba(0,200,255,0.5); }
+#game-wrap { position:relative;flex:1;width:100%;display:flex;justify-content:center;align-items:center; }
+canvas { display:block;image-rendering:pixelated; }
+.overlay { position:absolute;inset:0;background:rgba(5,7,15,0.93);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  backdrop-filter:blur(6px); }
+.overlay h2 { font-family:'Orbitron',monospace;font-size:28px;letter-spacing:4px;color:#00c8ff; }
+.overlay p  { color:rgba(224,240,255,0.55);font-size:15px;text-align:center;max-width:340px; }
+.overlay .score-big { font-family:'Orbitron',monospace;font-size:48px;font-weight:900;color:#fff;letter-spacing:6px; }
+.overlay .sub { font-family:'Orbitron',monospace;font-size:12px;color:rgba(0,200,255,0.5);letter-spacing:2px; }
+.ready-btn { background:#00c8ff;color:#000;border:none;padding:13px 32px;border-radius:8px;
+  font-family:'Orbitron',monospace;font-size:13px;font-weight:700;cursor:pointer;
+  letter-spacing:2px;text-transform:uppercase;transition:opacity .2s; }
+.ready-btn:hover { opacity:.85; }
+.ready-btn:disabled { opacity:.4;cursor:default; }
+/* Mobile controls */
+#mobile-ctrl { position:absolute;bottom:0;left:0;right:0;display:none;
+  justify-content:space-between;align-items:flex-end;padding:12px;z-index:10; }
+.paddle-ctrl { display:flex;flex-direction:column;gap:8px; }
+.paddle-btn { width:64px;height:64px;background:rgba(0,200,255,0.15);
+  border:2px solid rgba(0,200,255,0.3);border-radius:10px;
+  display:flex;align-items:center;justify-content:center;font-size:26px;
+  cursor:pointer;user-select:none;-webkit-user-select:none;transition:background .1s; }
+.paddle-btn:active,.paddle-btn.pressed { background:rgba(0,200,255,0.45); }
+@media(max-width:700px),(pointer:coarse) { #mobile-ctrl { display:flex; } }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="/games">← Back</a>
+  <h1>PONG</h1>
+  <div class="room-info" id="room-info"></div>
+</header>
+<div id="game-wrap">
+  <canvas id="c"></canvas>
+  <div id="mobile-ctrl">
+    <div class="paddle-ctrl">
+      <button class="paddle-btn" id="btn-up">▲</button>
+      <button class="paddle-btn" id="btn-down">▼</button>
+    </div>
+    <div style="font-family:'Orbitron',monospace;font-size:11px;color:rgba(0,200,255,0.4);text-align:center">
+      YOUR<br>PADDLE
+    </div>
+  </div>
+  <div class="overlay" id="overlay">
+    <div class="sub" id="ov-sub">MULTIPLAYER</div>
+    <h2 id="ov-title">PONG</h2>
+    <div class="score-big" id="ov-score" style="display:none">0 — 0</div>
+    <p id="ov-msg">Loading...</p>
+    <button class="ready-btn" id="ready-btn" style="display:none" onclick="sendReady()">Ready</button>
+  </div>
+</div>
+
+<script>
+// ─── Params ───────────────────────────────────────────────────────────────────
+const params   = new URLSearchParams(window.location.search);
+const roomId   = params.get('room') || 'PONG';
+const myName   = decodeURIComponent(params.get('name') || 'Player');
+document.getElementById('room-info').textContent = 'ROOM: ' + roomId;
+
+// ─── Canvas ───────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const W = 800, H = 400;
+
+function resize() {
+  const wrap = document.getElementById('game-wrap');
+  const maxW = Math.min(wrap.clientWidth, 900);
+  const maxH = wrap.clientHeight - 80;
+  const ratio = W / H;
+  let w = maxW, h = maxW / ratio;
+  if (h > maxH) { h = maxH; w = maxH * ratio; }
+  canvas.width = W; canvas.height = H;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let mySide = null;
+let ball    = { x: W/2, y: H/2 };
+let paddles = { left: H/2, right: H/2 };
+let scores  = { left: 0, right: 0 };
+let gameRunning = false;
+let myPaddleY = H/2;
+let keys = {};
+const PAD_H = 80, PAD_W = 12, BALL_R = 8, PAD_SPEED = 6;
+
+// ─── WebSocket ────────────────────────────────────────────────────────────────
+const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+const ws = new WebSocket(`${wsProto}://${location.host}/ws`);
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({ type: 'join', room: roomId, name: myName, game: 'pong' }));
+};
+
+ws.onmessage = (e) => {
+  const msg = JSON.parse(e.data);
+  handleMsg(msg);
+};
+
+ws.onclose = () => {
+  showOverlay('DISCONNECTED', 'Connection lost. Please refresh.', false);
+};
+
+function handleMsg(msg) {
+  switch (msg.type) {
+    case 'joined':
+      mySide = msg.side;
+      setOverlay('WAITING', 'Waiting for opponent...', false);
+      break;
+
+    case 'player_joined':
+      break;
+
+    case 'pong_waiting':
+      setOverlay('READY?', msg.message, true);
+      break;
+
+    case 'pong_start':
+      scores = msg.scores;
+      gameRunning = true;
+      hideOverlay();
+      break;
+
+    case 'pong_state':
+      ball    = msg.ball;
+      paddles = msg.paddles;
+      break;
+
+    case 'pong_score':
+      scores = msg.scores;
+      // Brief flash
+      break;
+
+    case 'pong_over':
+      gameRunning = false;
+      const won = msg.winner === myName;
+      showOverlay(
+        won ? '🏆 YOU WIN' : 'YOU LOSE',
+        `${msg.scores.left} — ${msg.scores.right}`,
+        true,
+        won ? '#00ff88' : '#ff4466'
+      );
+      break;
+  }
+}
+
+function sendReady() {
+  ws.send(JSON.stringify({ type: 'pong_ready' }));
+  document.getElementById('ready-btn').disabled = true;
+  document.getElementById('ready-btn').textContent = 'Waiting...';
+}
+
+// ─── Overlay helpers ─────────────────────────────────────────────────────────
+function setOverlay(title, msg, showReady) {
+  document.getElementById('overlay').style.display = 'flex';
+  document.getElementById('ov-title').textContent = title;
+  document.getElementById('ov-msg').textContent = msg;
+  document.getElementById('ov-score').style.display = 'none';
+  const btn = document.getElementById('ready-btn');
+  btn.style.display = showReady ? 'block' : 'none';
+  btn.disabled = false;
+  btn.textContent = 'Ready';
+}
+
+function showOverlay(title, scoreText, showBtn, color='#00c8ff') {
+  document.getElementById('overlay').style.display = 'flex';
+  document.getElementById('ov-title').textContent = title;
+  document.getElementById('ov-title').style.color = color;
+  document.getElementById('ov-score').style.display = 'block';
+  document.getElementById('ov-score').textContent = scoreText;
+  document.getElementById('ov-msg').textContent = '';
+  const btn = document.getElementById('ready-btn');
+  btn.style.display = showBtn ? 'block' : 'none';
+  btn.textContent = 'Play Again';
+  btn.disabled = false;
+  btn.onclick = () => location.reload();
+}
+
+function hideOverlay() {
+  document.getElementById('overlay').style.display = 'none';
+}
+
+// ─── Input ────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['ArrowUp','ArrowDown','KeyW','KeyS','Space'].includes(e.code)) e.preventDefault();
+});
+document.addEventListener('keyup', e => keys[e.code] = false);
+
+function bindBtn(id, code) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.addEventListener('touchstart', e => { e.preventDefault(); keys[code] = true; btn.classList.add('pressed'); }, {passive:false});
+  btn.addEventListener('touchend',   e => { e.preventDefault(); keys[code] = false; btn.classList.remove('pressed'); }, {passive:false});
+  btn.addEventListener('mousedown',  () => { keys[code] = true;  btn.classList.add('pressed'); });
+  btn.addEventListener('mouseup',    () => { keys[code] = false; btn.classList.remove('pressed'); });
+}
+bindBtn('btn-up',   'ArrowUp');
+bindBtn('btn-down', 'ArrowDown');
+
+// ─── Game loop ────────────────────────────────────────────────────────────────
+let lastSent = 0;
+function loop() {
+  requestAnimationFrame(loop);
+  if (!gameRunning) return;
+
+  // Move my paddle
+  const up   = keys['ArrowUp']   || keys['KeyW'];
+  const down = keys['ArrowDown'] || keys['KeyS'];
+  if (up)   myPaddleY = Math.max(PAD_H/2, myPaddleY - PAD_SPEED);
+  if (down) myPaddleY = Math.min(H - PAD_H/2, myPaddleY + PAD_SPEED);
+
+  // Update local prediction
+  if (mySide) paddles[mySide] = myPaddleY;
+
+  // Send to server throttled to 30/s
+  const now = Date.now();
+  if ((up || down) && now - lastSent > 33) {
+    ws.send(JSON.stringify({ type: 'pong_paddle', y: myPaddleY }));
+    lastSent = now;
+  }
+
+  draw();
+}
+
+// ─── Draw ─────────────────────────────────────────────────────────────────────
+function draw() {
+  // Background
+  ctx.fillStyle = '#05070f';
+  ctx.fillRect(0, 0, W, H);
+
+  // Centre line
+  ctx.setLineDash([12, 10]);
+  ctx.strokeStyle = 'rgba(0,200,255,0.12)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(W/2, 0);
+  ctx.lineTo(W/2, H);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Scores
+  ctx.font = 'bold 48px Orbitron, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(0,200,255,0.18)';
+  ctx.fillText(scores.left,  W/2 - 100, 70);
+  ctx.fillText(scores.right, W/2 + 100, 70);
+
+  // Player labels
+  ctx.font = '11px Orbitron, monospace';
+  ctx.fillStyle = mySide === 'left'
+    ? 'rgba(0,255,150,0.6)'
+    : 'rgba(0,200,255,0.35)';
+  ctx.fillText(mySide === 'left' ? '◀ YOU' : '◀', W/4, H - 12);
+  ctx.fillStyle = mySide === 'right'
+    ? 'rgba(0,255,150,0.6)'
+    : 'rgba(0,200,255,0.35)';
+  ctx.fillText(mySide === 'right' ? 'YOU ▶' : '▶', W * 3/4, H - 12);
+
+  // Paddles
+  drawPaddle(40, paddles.left,  mySide === 'left');
+  drawPaddle(W - 40 - PAD_W, paddles.right, mySide === 'right');
+
+  // Ball
+  ctx.shadowColor = '#00c8ff';
+  ctx.shadowBlur  = 14;
+  ctx.fillStyle   = '#fff';
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function drawPaddle(x, cy, isMe) {
+  const y = cy - PAD_H/2;
+  ctx.shadowColor = isMe ? '#00ff88' : '#00c8ff';
+  ctx.shadowBlur  = 12;
+  const g = ctx.createLinearGradient(x, y, x + PAD_W, y + PAD_H);
+  g.addColorStop(0, isMe ? '#00ff88' : '#00c8ff');
+  g.addColorStop(1, isMe ? '#009944' : '#006688');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.roundRect(x, y, PAD_W, PAD_H, 4);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+// ─── Start ────────────────────────────────────────────────────────────────────
+setOverlay('PONG', 'Connecting...', false);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
