@@ -6,7 +6,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Trivia — GameVault</title>
+<title>Vault Quiz — Vault Atlas</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
 <style>
 * { margin:0;padding:0;box-sizing:border-box; }
@@ -37,8 +37,8 @@ main { display:flex;flex-direction:column;align-items:center;padding:16px;gap:14
 .start-btn:hover{opacity:.85} .start-btn:disabled{opacity:.35;cursor:default;}
 .hint { font-family:'Orbitron',monospace;font-size:11px;color:rgba(255,200,0,0.35);text-align:center; }
 
-/* Game */
-.game { display:none;flex-direction:column;align-items:center;gap:14px;width:100%; }
+/* Sequence panel */
+.sequence-panel { display:none;flex-direction:column;align-items:center;gap:14px;width:100%; }
 .round-info { font-family:'Orbitron',monospace;font-size:12px;color:rgba(255,200,0,0.5);letter-spacing:2px; }
 .timer-bar { width:100%;height:6px;background:#0d1426;border-radius:3px;overflow:hidden; }
 .timer-fill { height:100%;background:#ffc800;transition:width 1s linear;border-radius:3px; }
@@ -86,8 +86,8 @@ main { display:flex;flex-direction:column;align-items:center;padding:16px;gap:14
 </head>
 <body>
 <header>
-  <a class="back" href="/games">← Back</a>
-  <h1>TRIVIA</h1>
+  <a class="back" href="/vault">← Back</a>
+  <h1>VAULT QUIZ</h1>
   <div class="room-tag" id="room-tag"></div>
   <div class="ping-badge" id="ping-badge">Ping -- ms</div>
 </header>
@@ -98,9 +98,9 @@ main { display:flex;flex-direction:column;align-items:center;padding:16px;gap:14
       <div id="player-list"></div>
     </div>
     <div class="hint" id="lobby-hint">Waiting for players...</div>
-    <button class="start-btn" id="start-btn" disabled onclick="startGame()">Start Game</button>
+    <button class="start-btn" id="start-btn" disabled onclick="beginSequence()">Begin Sequence</button>
   </div>
-  <div class="game" id="game">
+  <div class="sequence-panel" id="sequence-panel">
     <div class="round-info" id="round-info">Round 1 / 10</div>
     <div class="timer-bar"><div class="timer-fill" id="timer-fill"></div></div>
     <div class="question-box">
@@ -115,7 +115,7 @@ main { display:flex;flex-direction:column;align-items:center;padding:16px;gap:14
   </div>
 </main>
 <div class="overlay" id="overlay">
-  <h2 id="ov-title">GAME OVER</h2>
+  <h2 id="ov-title">SEQUENCE CLOSED</h2>
   <p id="ov-msg"></p>
   <div class="ov-scores" id="ov-scores"></div>
   <button class="start-btn" onclick="location.reload()">Play Again</button>
@@ -134,7 +134,7 @@ const wsProto = location.protocol==='https:'?'wss':'ws';
 const ws = new WebSocket(`${wsProto}://${location.host}/ws`);
 GameVaultMP.bindPingDisplay(ws, 'ping-badge');
 ws.onopen  = () => ws.send(JSON.stringify({type:'join',room:roomId,name:myName,game:'trivia'}));
-ws.onmessage = e => handleMsg(JSON.parse(e.data));
+ws.onmessage = e => { const d = JSON.parse(e.data); if (d.type === 'join_error') { alert(d.error || 'Unable to join this room.'); return; } handleMsg(d); };
 ws.onclose   = () => { document.getElementById('lobby-hint').textContent = 'Disconnected. Please refresh.'; };
 
 function send(obj) { if(ws.readyState===1) ws.send(JSON.stringify(obj)); }
@@ -155,7 +155,7 @@ function handleMsg(msg) {
       break;
     case 'trivia_start':
       document.getElementById('lobby').style.display = 'none';
-      document.getElementById('game').style.display = 'flex';
+      document.getElementById('sequence-panel').style.display = 'flex';
       break;
     case 'trivia_question':
       showQuestion(msg);
@@ -191,7 +191,7 @@ function updateLobby(p) {
   }
 }
 
-function startGame() {
+function beginSequence() {
   send({type:'start_game'});
 }
 
@@ -255,7 +255,7 @@ function revealAnswers(msg) {
 
 function showResults(msg) {
   const won = msg.winner === myName;
-  document.getElementById('ov-title').textContent = won ? '🏆 YOU WIN!' : 'GAME OVER';
+  document.getElementById('ov-title').textContent = won ? '🏆 YOU WIN!' : 'SEQUENCE CLOSED';
   document.getElementById('ov-title').style.color = won ? '#00ff88' : '#ffc800';
   document.getElementById('ov-msg').textContent = `Winner: ${msg.winner}`;
   const scores = document.getElementById('ov-scores');

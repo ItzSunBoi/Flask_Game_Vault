@@ -9,11 +9,11 @@
     token = Math.random().toString(36).substr(2,10);
     sessionStorage.setItem(key, token);
   }
-  // Keep gameTokenMap updated so /x/ redirects work too
+  // Keep vaultTokenMap updated so /x/ redirects work too
   try {
-    var map = JSON.parse(sessionStorage.getItem('gameTokenMap') || '{}');
+    var map = JSON.parse(sessionStorage.getItem('vaultTokenMap') || '{}');
     map[token] = location.pathname + location.search;
-    sessionStorage.setItem('gameTokenMap', JSON.stringify(map));
+    sessionStorage.setItem('vaultTokenMap', JSON.stringify(map));
   } catch(e) {}
   // Only rewrite if not already on /x/
   if (location.pathname !== '/x/') {
@@ -23,7 +23,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Minesweeper — GameVault</title>
+<title>Vault Mine — Vault Atlas</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
 <style>
 * { margin:0;padding:0;box-sizing:border-box; }
@@ -78,8 +78,8 @@ header h1 { font-family:'Orbitron',monospace;font-size:20px;color:#00cc66;letter
 </head>
 <body>
 <header>
-  <a class="back" href="/games">← Back</a>
-  <h1>MINESWEEPER</h1>
+  <a class="back" href="/vault">← Back</a>
+  <h1>VAULT MINE</h1>
 </header>
 <div class="top-bar">
   <div class="info-box"><div class="label">Mines</div><div class="val" id="mine-count">0</div></div>
@@ -89,14 +89,14 @@ header h1 { font-family:'Orbitron',monospace;font-size:20px;color:#00cc66;letter
     <button class="diff-btn" onclick="setDiff('medium')">Med</button>
     <button class="diff-btn" onclick="setDiff('hard')">Hard</button>
   </div>
-  <button class="new-btn" onclick="newGame()">New</button>
+  <button class="new-btn" onclick="resetSequence()">New</button>
 </div>
 <div class="board-wrap">
   <div id="board"></div>
   <div class="overlay show" id="overlay">
-    <h2 class="win-title" id="ov-title">MINESWEEPER</h2>
+    <h2 class="win-title" id="ov-title">VAULT MINE</h2>
     <p id="ov-msg">Find all mines without triggering them</p>
-    <button class="new-btn" onclick="newGame()">Play</button>
+    <button class="new-btn" onclick="resetSequence()">Play</button>
   </div>
 </div>
 
@@ -107,17 +107,17 @@ const DIFFS = {
   hard:   { cols:30, rows:16, mines:99 },
 };
 let diff = 'easy', cfg = DIFFS[diff];
-let grid, revealed, flagged, minesLeft, gameOver, firstClick, timerVal, timerInt;
+let grid, revealed, flagged, minesLeft, sequenceClosed, firstClick, timerVal, timerInt;
 
 function setDiff(d) {
   diff = d; cfg = DIFFS[d];
   document.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase().startsWith(d.slice(0,3))));
-  newGame();
+  resetSequence();
 }
 
-function newGame() {
+function resetSequence() {
   clearInterval(timerInt);
-  timerVal = 0; gameOver = false; firstClick = true;
+  timerVal = 0; sequenceClosed = false; firstClick = true;
   minesLeft = cfg.mines;
   grid = Array.from({length:cfg.rows}, () => Array(cfg.cols).fill(0));
   revealed = Array.from({length:cfg.rows}, () => Array(cfg.cols).fill(false));
@@ -183,7 +183,7 @@ function flag(r, c) {
 }
 
 function showLose(hitR, hitC) {
-  gameOver = true;
+  sequenceClosed = true;
   clearInterval(timerInt);
   for (let r = 0; r < cfg.rows; r++)
     for (let c = 0; c < cfg.cols; c++)
@@ -206,7 +206,7 @@ function checkWin() {
     for (let c = 0; c < cfg.cols; c++)
       if (revealed[r][c]) rev++;
   if (rev === total - cfg.mines) {
-    gameOver = true;
+    sequenceClosed = true;
     clearInterval(timerInt);
     setTimeout(() => {
       document.getElementById('ov-title').textContent = '✓ CLEARED';
@@ -234,18 +234,18 @@ function renderBoard() {
         d.classList.add('flagged');
         d.textContent = '🚩';
       }
-      d.addEventListener('click', () => { if (!gameOver) reveal(r, c); });
-      d.addEventListener('contextmenu', e => { e.preventDefault(); if (!gameOver) flag(r, c); });
+      d.addEventListener('click', () => { if (!sequenceClosed) reveal(r, c); });
+      d.addEventListener('contextmenu', e => { e.preventDefault(); if (!sequenceClosed) flag(r, c); });
       // Long press for mobile flag
       let pressTimer;
-      d.addEventListener('touchstart', () => { pressTimer = setTimeout(() => { if (!gameOver) flag(r, c); renderBoard(); }, 400); }, {passive:true});
+      d.addEventListener('touchstart', () => { pressTimer = setTimeout(() => { if (!sequenceClosed) flag(r, c); renderBoard(); }, 400); }, {passive:true});
       d.addEventListener('touchend', () => clearTimeout(pressTimer), {passive:true});
       board.appendChild(d);
     }
   }
 }
 
-newGame();
+resetSequence();
 </script>
 </body>
 </html>

@@ -9,11 +9,11 @@
     token = Math.random().toString(36).substr(2,10);
     sessionStorage.setItem(key, token);
   }
-  // Keep gameTokenMap updated so /x/ redirects work too
+  // Keep vaultTokenMap updated so /x/ redirects work too
   try {
-    var map = JSON.parse(sessionStorage.getItem('gameTokenMap') || '{}');
+    var map = JSON.parse(sessionStorage.getItem('vaultTokenMap') || '{}');
     map[token] = location.pathname + location.search;
-    sessionStorage.setItem('gameTokenMap', JSON.stringify(map));
+    sessionStorage.setItem('vaultTokenMap', JSON.stringify(map));
   } catch(e) {}
   // Only rewrite if not already on /x/
   if (location.pathname !== '/x/') {
@@ -23,7 +23,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Snake — GameVault</title>
+<title>Vault Serpent — Vault Atlas</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
@@ -55,8 +55,8 @@
 </head>
 <body>
 <header>
-  <a class="back" href="/games">← Back</a>
-  <h1>SNAKE</h1>
+  <a class="back" href="/vault">← Back</a>
+  <h1>VAULT SERPENT</h1>
 </header>
 <div class="top">
   <div class="score-box"><div class="label">Score</div><div class="val" id="score">0</div></div>
@@ -66,9 +66,9 @@
 <div class="wrap">
   <canvas id="c" width="360" height="360"></canvas>
   <div class="overlay" id="overlay">
-    <h2>SNAKE</h2>
+    <h2>VAULT SERPENT</h2>
     <p>Arrow keys or swipe to move</p>
-    <button class="btn" onclick="startGame()">Play</button>
+    <button class="btn" onclick="beginSequence()">Play</button>
   </div>
 </div>
 <div class="d-pad">
@@ -88,13 +88,13 @@ const GRID = 18, CELL = 20, W = GRID, H = GRID;
 let snake, dir, nextDir, food, score, level, running, raf, speed;
 const best = () => parseInt(localStorage.getItem('snake_best') || '0');
 
-function startGame() {
+function beginSequence() {
   snake = [{x:9,y:9},{x:8,y:9},{x:7,y:9}];
   dir = {x:1,y:0}; nextDir = {x:1,y:0};
   food = spawnFood(); score = 0; level = 1; speed = 180; running = true;
   document.getElementById('overlay').style.display = 'none';
   document.getElementById('best').textContent = best();
-  cancelAnimationFrame(raf); gameLoop(0);
+  cancelAnimationFrame(raf); sequenceLoop(0);
 }
 
 function spawnFood() {
@@ -105,16 +105,16 @@ function spawnFood() {
 }
 
 let lastTime = 0;
-function gameLoop(ts) {
-  raf = requestAnimationFrame(gameLoop);
+function sequenceLoop(ts) {
+  raf = requestAnimationFrame(sequenceLoop);
   if (ts - lastTime < speed) return;
   lastTime = ts;
   dir = nextDir;
   const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
   // Wall collision
-  if (head.x < 0 || head.x >= W || head.y < 0 || head.y >= H) { gameOver(); return; }
+  if (head.x < 0 || head.x >= W || head.y < 0 || head.y >= H) { closeSequence(); return; }
   // Self collision
-  if (snake.some(s => s.x===head.x && s.y===head.y)) { gameOver(); return; }
+  if (snake.some(s => s.x===head.x && s.y===head.y)) { closeSequence(); return; }
   snake.unshift(head);
   if (head.x === food.x && head.y === food.y) {
     score += 10 * level;
@@ -137,7 +137,7 @@ function draw() {
   ctx.shadowBlur = 12; ctx.shadowColor = '#ff4488';
   ctx.beginPath(); ctx.arc(food.x*CELL+CELL/2, food.y*CELL+CELL/2, CELL/2-2, 0, Math.PI*2); ctx.fill();
   ctx.shadowBlur = 0;
-  // Snake
+  // Vault Serpent
   snake.forEach((s, i) => {
     const alpha = 1 - (i / snake.length) * 0.5;
     ctx.fillStyle = i===0 ? '#00ffcc' : `rgba(0,${Math.floor(180-i*2)},${Math.floor(170-i*2)},${alpha})`;
@@ -150,16 +150,16 @@ function draw() {
 
 function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();c.fill();}
 
-function gameOver() {
+function closeSequence() {
   running = false; cancelAnimationFrame(raf);
   if (score > best()) localStorage.setItem('snake_best', score);
-  renderLeaderboard();
+  renderArchiveLedger();
   const ov = document.getElementById('overlay');
   ov.style.display = 'flex';
-  ov.innerHTML = `<h2>GAME OVER</h2><p>Score: ${score}</p><button class="btn" onclick="startGame()">Play Again</button>`;
+  ov.innerHTML = `<h2>SEQUENCE CLOSED</h2><p>Score: ${score}</p><button class="btn" onclick="beginSequence()">Play Again</button>`;
 }
 
-function renderLeaderboard() {
+function renderArchiveLedger() {
   const b = best();
   document.getElementById('best').textContent = b;
   const scores = JSON.parse(localStorage.getItem('snake_scores') || '[]');
@@ -194,7 +194,7 @@ canvas.addEventListener('touchend',e=>{
   else{const d=dy>0?{x:0,y:1}:{x:0,y:-1};if(!(d.y===-dir.y))nextDir=d;}
 });
 
-renderLeaderboard();
+renderArchiveLedger();
 ctx.fillStyle='#05070f';ctx.fillRect(0,0,canvas.width,canvas.height);
 </script>
 </body>

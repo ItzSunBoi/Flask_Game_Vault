@@ -9,11 +9,11 @@
     token = Math.random().toString(36).substr(2,10);
     sessionStorage.setItem(key, token);
   }
-  // Keep gameTokenMap updated so /x/ redirects work too
+  // Keep vaultTokenMap updated so /x/ redirects work too
   try {
-    var map = JSON.parse(sessionStorage.getItem('gameTokenMap') || '{}');
+    var map = JSON.parse(sessionStorage.getItem('vaultTokenMap') || '{}');
     map[token] = location.pathname + location.search;
-    sessionStorage.setItem('gameTokenMap', JSON.stringify(map));
+    sessionStorage.setItem('vaultTokenMap', JSON.stringify(map));
   } catch(e) {}
   // Only rewrite if not already on /x/
   if (location.pathname !== '/x/') {
@@ -23,7 +23,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Tetris — GameVault</title>
+<title>Vault Stack — Vault Atlas</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
 <style>
   * { margin:0;padding:0;box-sizing:border-box; }
@@ -34,7 +34,7 @@
   .back { color:rgba(0,255,170,0.7);text-decoration:none;font-size:13px;letter-spacing:1px;
     text-transform:uppercase;font-family:'Orbitron',monospace; }
   header h1 { font-family:'Orbitron',monospace;font-size:20px;color:#ff2255;letter-spacing:3px; }
-  .game-wrap { display:flex;gap:24px;align-items:flex-start;padding:24px;flex-wrap:wrap;justify-content:center; }
+  .vault-wrap { display:flex;gap:24px;align-items:flex-start;padding:24px;flex-wrap:wrap;justify-content:center; }
   canvas { border:2px solid rgba(255,34,85,0.4);border-radius:4px;display:block;
     box-shadow:0 0 30px rgba(255,34,85,0.15); }
   .sidebar { width:140px;display:flex;flex-direction:column;gap:16px; }
@@ -64,16 +64,16 @@
 </head>
 <body>
 <header>
-  <a class="back" href="/games">← Back</a>
-  <h1>TETRIS</h1>
+  <a class="back" href="/vault">← Back</a>
+  <h1>VAULT STACK</h1>
 </header>
-<div class="game-wrap">
+<div class="vault-wrap">
   <div class="canvas-wrap">
     <canvas id="board" width="300" height="600"></canvas>
     <div class="overlay" id="overlay">
-      <h2>TETRIS</h2>
+      <h2>VAULT STACK</h2>
       <p>Use arrow keys or touch controls</p>
-      <button class="btn" onclick="startGame()">Start Game</button>
+      <button class="btn" onclick="beginSequence()">Begin Sequence</button>
     </div>
   </div>
   <div class="sidebar">
@@ -93,7 +93,7 @@
       <div class="panel-title">Next</div>
       <canvas class="next-canvas" id="next" width="100" height="100"></canvas>
     </div>
-    <button class="btn" onclick="startGame()">New Game</button>
+    <button class="btn" onclick="beginSequence()">Reset Sequence</button>
   </div>
 </div>
 <div class="touch-ctrl" id="touch-ctrl">
@@ -207,7 +207,7 @@ function drawNext(){
   }));
 }
 
-function startGame(){
+function beginSequence(){
   board=newBoard(); score=0; level=1; lines=0; running=true;
   piece=randPiece(); nextPiece=randPiece();
   document.getElementById('overlay').style.display='none';
@@ -232,7 +232,7 @@ function loop(ts){
     lastDrop=ts;
     if(valid({...piece,y:piece.y+1},board)) piece.y++;
     else{ place(piece,board); const cl=clearLines(board); updateScore(cl); piece=nextPiece; nextPiece=randPiece(); updateUI();
-      if(!valid(piece,board)){gameOver();return;} }
+      if(!valid(piece,board)){closeSequence();return;} }
   }
   draw();
 }
@@ -243,10 +243,10 @@ function updateScore(cl){
   level=Math.floor(lines/10)+1;
 }
 
-function gameOver(){
+function closeSequence(){
   running=false;
   const ov=document.getElementById('overlay');
-  ov.innerHTML=`<h2>GAME OVER</h2><p>Score: ${score}</p><button class="btn" onclick="startGame()">Play Again</button>`;
+  ov.innerHTML=`<h2>SEQUENCE CLOSED</h2><p>Score: ${score}</p><button class="btn" onclick="beginSequence()">Play Again</button>`;
   ov.style.display='flex';
   // Save leaderboard
   try{

@@ -6,7 +6,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Bomberman — GameVault</title>
+<title>Vault Blast — Vault Atlas</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
 <style>
 * { margin:0;padding:0;box-sizing:border-box; }
@@ -67,8 +67,8 @@ canvas { display:block;image-rendering:pixelated; }
 </head>
 <body>
 <header>
-  <a class="back" href="/games">← Back</a>
-  <h1>BOMBERMAN</h1>
+  <a class="back" href="/vault">← Back</a>
+  <h1>VAULT BLAST</h1>
   <div class="room-tag" id="room-tag"></div>
   <div class="ping-badge" id="ping-badge">Ping -- ms</div>
 </header>
@@ -86,10 +86,10 @@ canvas { display:block;image-rendering:pixelated; }
   </div>
   <button id="bomb-btn">💣</button>
   <div class="overlay show" id="overlay">
-    <h2 id="ov-title">BOMBERMAN</h2>
+    <h2 id="ov-title">VAULT BLAST</h2>
     <p id="ov-msg">Place bombs, destroy blocks, eliminate opponents!</p>
     <div class="players-pre" id="players-pre"></div>
-    <button class="btn" id="start-btn" disabled onclick="sendStart()">Start Game</button>
+    <button class="btn" id="start-btn" disabled onclick="sendStart()">Begin Sequence</button>
     <p style="font-size:12px;color:rgba(255,120,0,0.4);font-family:Orbitron,monospace" id="hint-txt">Waiting for players...</p>
   </div>
 </div>
@@ -107,7 +107,7 @@ const T_EMPTY = 0, T_WALL = 1, T_BLOCK = 2;
 let map = [], players = [], bombs = [], flames = [], powerups = [];
 let myPlayer = null;
 let isHost = false;
-let gameRunning = false;
+let sequenceLive = false;
 const keys = {};
 
 // Movement throttle
@@ -139,7 +139,7 @@ const wsProto = location.protocol==='https:'?'wss':'ws';
 const ws = new WebSocket(`${wsProto}://${location.host}/ws`);
 GameVaultMP.bindPingDisplay(ws, 'ping-badge');
 ws.onopen    = () => ws.send(JSON.stringify({type:'join',room:roomId,name:myName,game:'bomberman'}));
-ws.onmessage = e => handleMsg(JSON.parse(e.data));
+ws.onmessage = e => { const d = JSON.parse(e.data); if (d.type === 'join_error') { alert(d.error || 'Unable to join this room.'); return; } handleMsg(d); };
 ws.onclose   = () => document.getElementById('hint-txt').textContent = 'Disconnected. Refresh to reconnect.';
 function send(o) { if(ws.readyState===1) ws.send(JSON.stringify(o)); }
 
@@ -166,7 +166,7 @@ function handleMsg(msg) {
       flames   = msg.flames  || [];
       powerups = msg.powerups|| [];
       myPlayer = players.find(p => p.name === myName);
-      gameRunning = true;
+      sequenceLive = true;
       TILE_PX = resizeCanvas();
       document.getElementById('overlay').classList.remove('show');
       updateHUD();
@@ -200,7 +200,7 @@ function handleMsg(msg) {
       break;
 
     case 'bomb_over':
-      gameRunning = false;
+      sequenceLive = false;
       const won = msg.winner === myName;
       document.getElementById('ov-title').textContent = won ? '🏆 WINNER!' : msg.winner + ' WINS';
       document.getElementById('ov-title').style.color = won ? '#00ff88' : '#ff7800';
@@ -248,7 +248,7 @@ function updateHUD() {
 document.addEventListener('keydown', e => {
   keys[e.code] = true;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
-  if (e.code === 'Space' && gameRunning) placeBomb();
+  if (e.code === 'Space' && sequenceLive) placeBomb();
 });
 document.addEventListener('keyup', e => keys[e.code] = false);
 
@@ -263,12 +263,12 @@ function dpad(id, code) {
 dpad('btn-up','ArrowUp'); dpad('btn-down','ArrowDown');
 dpad('btn-left','ArrowLeft'); dpad('btn-right','ArrowRight');
 const bombBtn = document.getElementById('bomb-btn');
-bombBtn.addEventListener('touchstart', e=>{e.preventDefault();if(gameRunning)placeBomb();},{passive:false});
-bombBtn.addEventListener('click', ()=>{if(gameRunning)placeBomb();});
+bombBtn.addEventListener('touchstart', e=>{e.preventDefault();if(sequenceLive)placeBomb();},{passive:false});
+bombBtn.addEventListener('click', ()=>{if(sequenceLive)placeBomb();});
 
 // ── Movement ──────────────────────────────────────────────────────────────────
 function tryMove() {
-  if (!gameRunning || !myPlayer || !myPlayer.alive) return;
+  if (!sequenceLive || !myPlayer || !myPlayer.alive) return;
   const now = Date.now();
   if (now - lastMove < MOVE_DELAY) return;
   let dr=0, dc=0;
@@ -409,7 +409,7 @@ function draw() {
 function loop() {
   requestAnimationFrame(loop);
   tryMove();
-  if (gameRunning) draw();
+  if (sequenceLive) draw();
 }
 
 TILE_PX = resizeCanvas();

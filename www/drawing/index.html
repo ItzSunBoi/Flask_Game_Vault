@@ -6,7 +6,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Drawing Party — GameVault</title>
+<title>Vault Sketch — Vault Atlas</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
@@ -15,7 +15,7 @@
   .back{color:rgba(123,47,255,0.7);text-decoration:none;font-size:12px;letter-spacing:1px;text-transform:uppercase;font-family:'Orbitron',monospace;}
   header h1{font-family:'Orbitron',monospace;font-size:18px;color:#a07bff;letter-spacing:2px;}
   .room-badge{margin-left:auto;font-family:'Orbitron',monospace;font-size:13px;color:#7b2fff;}
-  .game-area{display:flex;flex:1;gap:0;overflow:hidden;}
+  .vault-area{display:flex;flex:1;gap:0;overflow:hidden;}
   .left-panel{width:220px;flex-shrink:0;border-right:1px solid rgba(123,47,255,0.15);display:flex;flex-direction:column;padding:12px;gap:10px;overflow-y:auto;}
   .center{flex:1;display:flex;flex-direction:column;}
   .word-bar{padding:10px 16px;background:#0d1426;border-bottom:1px solid rgba(123,47,255,0.15);display:flex;align-items:center;gap:12px;flex-shrink:0;}
@@ -63,12 +63,12 @@
 </head>
 <body>
 <header>
-  <a class="back" href="/games">← Back</a>
-  <h1>🎨 Drawing Party</h1>
+  <a class="back" href="/vault">← Back</a>
+  <h1>🎨 Vault Sketch</h1>
   <div class="room-badge" id="room-badge">Room: ---</div>
   <div class="ping-badge" id="ping-badge">Ping -- ms</div>
 </header>
-<div class="game-area">
+<div class="vault-area">
   <div class="left-panel">
     <div class="panel-title">Players</div>
     <div class="player-list" id="player-list"></div>
@@ -94,7 +94,7 @@
       <button class="tool-btn danger" onclick="clearCanvas()">Clear</button>
     </div>
     <div class="overlay" id="overlay">
-      <h2>Drawing Party</h2>
+      <h2>Vault Sketch</h2>
       <p style="color:rgba(224,240,255,0.6)">Connecting to room...</p>
     </div>
   </div>
@@ -252,14 +252,18 @@ function connect() {
   };
   ws.onmessage = e => {
     const d = JSON.parse(e.data);
+    if (d.type === 'join_error') {
+      alert(d.error || 'Unable to join this room.');
+      return;
+    }
     if (d.type === 'joined') {
       addMsg('', `Welcome, ${playerName}! Room: ${roomId}`, 'system');
       renderPlayers(d.players || []);
       document.getElementById('overlay').style.display = 'flex';
       document.getElementById('overlay').innerHTML = `
-        <h2>Drawing Party</h2>
+        <h2>Vault Sketch</h2>
         <p style="color:rgba(224,240,255,0.6)">Room ${roomId} — waiting for players...</p>
-        ${d.isHost ? `<button class="btn" onclick="ws.send(JSON.stringify({type:'start_game',room:'${roomId}'}))">Start Game</button>` : ''}
+        ${d.isHost ? `<button class="btn" onclick="ws.send(JSON.stringify({type:'start_game',room:'${roomId}'}))">Begin Sequence</button>` : ''}
       `;
     }
     if (d.type === 'player_joined') { addMsg('', `${d.name} joined`, 'system'); renderPlayers(d.players); }
@@ -298,10 +302,10 @@ function connect() {
       renderPlayers(d.players);
     }
     if (d.type === 'game_over') {
-      addMsg('', `Game over! Winner: ${d.winner}`, 'system');
+      addMsg('', `Sequence closed! Victor: ${d.winner}`, 'system');
       document.getElementById('overlay').style.display = 'flex';
       document.getElementById('overlay').innerHTML = `
-        <h2>Game Over!</h2>
+        <h2>Sequence Closed!</h2>
         <p style="color:rgba(224,240,255,0.6)">Winner: ${d.winner}</p>
         <button class="btn" onclick="document.getElementById('overlay').style.display='none';ws.send(JSON.stringify({type:'start_game',room:'${roomId}'}))">Play Again</button>
       `;
@@ -309,9 +313,9 @@ function connect() {
     if (d.type === 'waiting') {
       document.getElementById('overlay').style.display = 'flex';
       document.getElementById('overlay').innerHTML = `
-        <h2>Drawing Party</h2>
+        <h2>Vault Sketch</h2>
         <p style="color:rgba(224,240,255,0.6)">${d.message || 'Waiting for more players...'}</p>
-        ${d.canStart ? `<button class="btn" onclick="ws.send(JSON.stringify({type:'start_game',room:'${roomId}'}))">Start Game</button>` : ''}
+        ${d.canStart ? `<button class="btn" onclick="ws.send(JSON.stringify({type:'start_game',room:'${roomId}'}))">Begin Sequence</button>` : ''}
       `;
     }
     if (d.type === 'timer') { document.getElementById('timer').textContent = d.value; }

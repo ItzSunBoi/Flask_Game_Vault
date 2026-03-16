@@ -6,7 +6,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chess — GameVault</title>
+<title>Vault Rook — Vault Atlas</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <style>
@@ -60,8 +60,8 @@
 </head>
 <body>
 <header>
-  <a class="back" href="/games">← Back</a>
-  <h1>CHESS</h1>
+  <a class="back" href="/vault">← Back</a>
+  <h1>VAULT ROOK</h1>
   <div class="ping-badge" id="ping-badge">Ping -- ms</div>
 </header>
 <div class="layout">
@@ -85,7 +85,7 @@
       <div class="move-list" id="move-list"></div>
     </div>
     <button class="btn secondary" onclick="copyRoom()">Copy Room Link</button>
-    <button class="btn secondary" onclick="window.location='/games'">Back to Portal</button>
+    <button class="btn secondary" onclick="window.location='/vault'">Back to Atlas</button>
   </div>
 </div>
 
@@ -223,7 +223,7 @@ function updateMoveList() {
 }
 
 function copyRoom() {
-  const url = `${location.origin}/chess/?room=${roomId}&name=${encodeURIComponent(playerName)}`;
+  const url = `${location.origin}/vault-rook/?room=${roomId}&name=${encodeURIComponent(playerName)}`;
   navigator.clipboard.writeText(url).then(() => alert('Room link copied!')).catch(() => alert(url));
 }
 
@@ -237,13 +237,17 @@ function connect() {
   };
   ws.onmessage = e => {
     const d = JSON.parse(e.data);
+    if (d.type === 'join_error') {
+      alert(d.error || 'Unable to join this room.');
+      return;
+    }
     if (d.type === 'joined') {
       myColor = d.color;
       setStatus(`You are <span class="highlight">${myColor === 'w' ? 'White' : 'Black'}</span> — waiting for opponent...`);
       buildBoard();
     }
     if (d.type === 'game_start') {
-      setStatus(`Game started! ${chess.turn() === myColor[0] ? '<span class="highlight">YOUR TURN</span>' : "Opponent's turn"}`);
+      setStatus(`Sequence initiated! ${chess.turn() === myColor[0] ? '<span class="highlight">YOUR TURN</span>' : "Opponent's turn"}`);
       buildBoard();
     }
     if (d.type === 'chess_move') {

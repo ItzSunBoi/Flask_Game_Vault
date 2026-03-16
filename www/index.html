@@ -9,11 +9,11 @@
     token = Math.random().toString(36).substr(2,10);
     sessionStorage.setItem(key, token);
   }
-  // Keep gameTokenMap updated so /x/ redirects work too
+  // Keep vaultTokenMap updated so /x/ redirects work too
   try {
-    var map = JSON.parse(sessionStorage.getItem('gameTokenMap') || '{}');
+    var map = JSON.parse(sessionStorage.getItem('vaultTokenMap') || '{}');
     map[token] = location.pathname + location.search;
-    sessionStorage.setItem('gameTokenMap', JSON.stringify(map));
+    sessionStorage.setItem('vaultTokenMap', JSON.stringify(map));
   } catch(e) {}
   // Only rewrite if not already on /x/
   if (location.pathname !== '/x/') {
@@ -179,10 +179,10 @@ function handleEquals() {
     const res = calc(prev, val, op);
     historyEl.textContent = fullExpr + ' ' + val + ' =';
     setDisplay(String(res));
-    if (String(res) === SECRET || display === SECRET) { setTimeout(() => goSecret('/games','gameAccess'), 150); return; }
+    if (String(res) === SECRET || display === SECRET) { setTimeout(() => goSecret('/vault','vaultAccess'), 150); return; }
     prev = res; justCalc = true;
   } else if (display === SECRET) {
-    goSecret('/games','gameAccess');
+    goSecret('/vault','vaultAccess');
   }
 }
 

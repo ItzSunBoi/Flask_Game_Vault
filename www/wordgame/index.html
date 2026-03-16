@@ -6,7 +6,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Word Bomb — GameVault</title>
+<title>Vault Lex — Vault Atlas</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
@@ -56,8 +56,8 @@
 </head>
 <body>
 <header>
-  <a class="back" href="/games">← Back</a>
-  <h1>💣 Word Bomb</h1>
+  <a class="back" href="/vault">← Back</a>
+  <h1>◇ Vault Lex</h1>
   <div class="room-badge" id="room-badge">Room: ---</div>
   <div class="ping-badge" id="ping-badge">Ping -- ms</div>
 </header>
@@ -76,10 +76,10 @@
 </div>
 
 <div class="overlay" id="overlay">
-  <h2>💣 Word Bomb</h2>
+  <h2>◇ Vault Lex</h2>
   <div class="room-code" id="room-code">ROOM ---</div>
   <p id="overlay-msg">Connecting...</p>
-  <button class="btn" id="start-btn" style="display:none" onclick="startGame()">Start Game</button>
+  <button class="btn" id="start-btn" style="display:none" onclick="beginSequence()">Begin Sequence</button>
 </div>
 
 <script>
@@ -126,7 +126,7 @@ function startTimer(secs) {
   }, 50);
 }
 
-function startGame() {
+function beginSequence() {
   ws && ws.send(JSON.stringify({ type: 'start_game', room: roomId }));
 }
 
@@ -147,6 +147,10 @@ function connect() {
   ws.onopen = () => ws.send(JSON.stringify({ type: 'join', room: roomId, name: playerName, game: 'wordgame' }));
   ws.onmessage = e => {
     const d = JSON.parse(e.data);
+    if (d.type === 'join_error') {
+      alert(d.error || 'Unable to join this room.');
+      return;
+    }
     if (d.type === 'joined') {
       isHost = !!d.isHost;
       document.getElementById('overlay').style.display = 'flex';
@@ -176,7 +180,7 @@ function connect() {
     }
     if (d.type === 'game_start') {
       document.getElementById('overlay').style.display = 'none';
-      addLog('Game started!', 'sys');
+      addLog('Sequence initiated!', 'sys');
     }
     if (d.type === 'turn') {
       document.getElementById('overlay').style.display = 'none';
@@ -213,11 +217,11 @@ function connect() {
     if (d.type === 'game_over') {
       document.getElementById('overlay').style.display = 'flex';
       document.getElementById('overlay').innerHTML = `
-        <h2>💣 Game Over!</h2>
+        <h2>◇ Sequence Closed!</h2>
         <div class="room-code">ROOM ${roomId}</div>
         <p style="color:rgba(224,240,255,0.6)">Winner: <strong>${d.winner}</strong></p>
         <button class="btn" onclick="location.reload()">Play Again</button>
-        <a href="/games" style="color:rgba(224,240,255,0.4);font-size:13px;margin-top:8px">Back to portal</a>
+        <a href="/vault" style="color:rgba(224,240,255,0.4);font-size:13px;margin-top:8px">Back to atlas</a>
       `;
     }
   };

@@ -9,11 +9,11 @@
     token = Math.random().toString(36).substr(2,10);
     sessionStorage.setItem(key, token);
   }
-  // Keep gameTokenMap updated so /x/ redirects work too
+  // Keep vaultTokenMap updated so /x/ redirects work too
   try {
-    var map = JSON.parse(sessionStorage.getItem('gameTokenMap') || '{}');
+    var map = JSON.parse(sessionStorage.getItem('vaultTokenMap') || '{}');
     map[token] = location.pathname + location.search;
-    sessionStorage.setItem('gameTokenMap', JSON.stringify(map));
+    sessionStorage.setItem('vaultTokenMap', JSON.stringify(map));
   } catch(e) {}
   // Only rewrite if not already on /x/
   if (location.pathname !== '/x/') {
@@ -23,7 +23,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Neon Run — GameVault</title>
+<title>Vault Neon — Vault Atlas</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
 <style>
 * { margin:0;padding:0;box-sizing:border-box; }
@@ -37,7 +37,7 @@ header h1 { font-family:'Orbitron',monospace;font-size:18px;color:#ff50c8;letter
 .hud { display:flex;gap:16px;margin-left:auto;align-items:center; }
 .hud-item { font-family:'Orbitron',monospace;font-size:13px;color:rgba(255,80,200,0.8); }
 .hud-item span { color:#fff;font-weight:900; }
-#game-wrap { position:relative;flex:1;width:100%;display:flex;justify-content:center;align-items:flex-start; }
+#vault-wrap { position:relative;flex:1;width:100%;display:flex;justify-content:center;align-items:flex-start; }
 canvas { display:block;image-rendering:pixelated; }
 .overlay { position:absolute;inset:0;background:rgba(5,7,15,0.92);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
@@ -71,8 +71,8 @@ canvas { display:block;image-rendering:pixelated; }
 </head>
 <body>
 <header>
-  <a class="back" href="/games">← Back</a>
-  <h1>NEON RUN</h1>
+  <a class="back" href="/vault">← Back</a>
+  <h1>VAULT NEON</h1>
   <div class="hud">
     <div class="hud-item">LVL <span id="h-lvl">1</span></div>
     <div class="hud-item">GEMS <span id="h-gems">0</span></div>
@@ -80,7 +80,7 @@ canvas { display:block;image-rendering:pixelated; }
     <div class="hud-item">PTS <span id="h-score">0</span></div>
   </div>
 </header>
-<div id="game-wrap">
+<div id="vault-wrap">
   <canvas id="c"></canvas>
   <div id="dpad">
     <button class="dpad-btn" id="btn-up">▲</button>
@@ -93,11 +93,11 @@ canvas { display:block;image-rendering:pixelated; }
   <button id="jump-btn">↑</button>
   <div class="overlay" id="overlay">
     <div class="sub" id="ov-sub">PLATFORMER</div>
-    <h2 id="ov-title">NEON RUN</h2>
+    <h2 id="ov-title">VAULT NEON</h2>
     <div class="score-big" id="ov-score" style="display:none">0</div>
     <p id="ov-msg">Collect gems, dodge enemies, reach the portal</p>
     <p style="color:rgba(224,240,255,0.35);font-size:13px">Arrow keys / WASD · Space to jump · Mobile: d-pad</p>
-    <button class="play-btn" id="play-btn" onclick="startGame()">Play</button>
+    <button class="play-btn" id="play-btn" onclick="beginSequence()">Play</button>
   </div>
 </div>
 
@@ -107,7 +107,7 @@ const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 
 function resize() {
-  const wrap  = document.getElementById('game-wrap');
+  const wrap  = document.getElementById('vault-wrap');
   const maxW  = Math.min(wrap.clientWidth, 900);
   const maxH  = wrap.clientHeight - 8;
   const ratio = WORLD_W / WORLD_H;
@@ -273,7 +273,7 @@ if (jb) {
   jb.addEventListener('mouseup',    () => keys['ArrowUp'] = false);
 }
 
-// ─── Game init ────────────────────────────────────────────────────────────────
+// ─── Sequence init ────────────────────────────────────────────────────────────
 function loadLevel(idx) {
   const lvl = LEVELS[idx];
   platforms   = lvl.platforms.map(p => ({...p}));
@@ -301,7 +301,7 @@ function spawnPlayer(pos) {
   };
 }
 
-function startGame() {
+function beginSequence() {
   levelIdx = 0; score = 0; lives = 3;
   document.getElementById('overlay').style.display = 'none';
   loadLevel(0);
@@ -485,7 +485,7 @@ function killPlayer() {
   deadTimer = 0;
   updateHUD();
   if (lives <= 0) {
-    setTimeout(showGameOver, 1500);
+    setTimeout(showClosure, 1500);
   }
 }
 
@@ -506,13 +506,13 @@ function nextLevel() {
   updateHUD();
 }
 
-function showGameOver() {
+function showClosure() {
   running = false;
   if (score > hiScore) { hiScore = score; localStorage.setItem('neonrun-hi', hiScore); }
   const ov = document.getElementById('overlay');
   ov.style.display = 'flex';
-  document.getElementById('ov-sub').textContent   = 'GAME OVER';
-  document.getElementById('ov-title').textContent = 'NEON RUN';
+  document.getElementById('ov-sub').textContent   = 'SEQUENCE CLOSED';
+  document.getElementById('ov-title').textContent = 'VAULT NEON';
   document.getElementById('ov-score').style.display = 'block';
   document.getElementById('ov-score').textContent = score;
   document.getElementById('ov-msg').textContent   = 'Best: ' + hiScore;

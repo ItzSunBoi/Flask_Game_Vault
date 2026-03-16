@@ -1,23 +1,61 @@
 (function () {
+  const COOKIE_NAME = 'gamevault_player';
+
   function randRoomCode() {
     return Math.random().toString(36).slice(2, 8).toUpperCase();
   }
 
+  function readProfileCookie() {
+    try {
+      const parts = document.cookie.split(';').map(v => v.trim());
+      const row = parts.find(v => v.startsWith(COOKIE_NAME + '='));
+      if (!row) return {};
+      const raw = decodeURIComponent(row.slice(COOKIE_NAME.length + 1));
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function writeProfileCookie(profile) {
+    try {
+      const expires = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toUTCString();
+      const value = encodeURIComponent(JSON.stringify(profile || {}));
+      document.cookie = `${COOKIE_NAME}=${value}; expires=${expires}; path=/; SameSite=Lax`;
+    } catch (_) {}
+  }
+
   function normalizePlayerName(name, fallback) {
-    const value = (name || '').trim();
+    const value = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 24);
     return value || fallback || ('Player' + Math.floor(Math.random() * 900 + 100));
+  }
+
+  function normalizeRoomCode(room, fallback) {
+    const value = String(room || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 24);
+    return value || fallback || randRoomCode();
   }
 
   function normalizeMultiplayerParams(options) {
     const opts = options || {};
     const params = new URLSearchParams(window.location.search);
-    let room = (params.get('room') || '').trim().toUpperCase();
-    let name = (params.get('name') || localStorage.getItem('playerName') || '').trim();
+    const cookieProfile = readProfileCookie();
+    const storedName = localStorage.getItem('playerName') || '';
+    const storedRoom = localStorage.getItem('lastRoomId') || '';
+    const storedGame = localStorage.getItem('lastGameId') || '';
 
-    room = room || randRoomCode();
+    let room = params.get('room') || cookieProfile.room || storedRoom || '';
+    let name = params.get('name') || cookieProfile.name || storedName || '';
+    let game = opts.game || params.get('game') || cookieProfile.game || storedGame || '';
+
+    room = normalizeRoomCode(room, randRoomCode());
     name = normalizePlayerName(name, opts.defaultName || 'Player');
+    game = String(game || '').trim().toLowerCase();
 
     localStorage.setItem('playerName', name);
+    localStorage.setItem('lastRoomId', room);
+    if (game) localStorage.setItem('lastGameId', game);
+    writeProfileCookie({ name, room, game });
 
     const next = new URLSearchParams(window.location.search);
     if (next.get('room') !== room) next.set('room', room);
@@ -27,7 +65,7 @@
       history.replaceState(null, '', nextUrl);
     }
 
-    return { roomId: room, playerName: name, params: next };
+    return { roomId: room, playerName: name, game, params: next };
   }
 
   function bindPingDisplay(ws, elementOrId) {

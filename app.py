@@ -12,7 +12,7 @@ Behind nginx (recommended for SSL / Cloudflare Tunnel):
 
 import os, json, random, time, threading
 from functools import lru_cache
-from flask import Flask, send_from_directory, abort, request, jsonify, Response
+from flask import Flask, send_from_directory, abort, request, jsonify, Response, redirect
 
 try:
     from wordfreq import zipf_frequency
@@ -21,11 +21,16 @@ except Exception:
 
 # ── App setup ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
+app.config['JSON_SORT_KEYS'] = False
 
 BASE_DIR = os.path.dirname(__file__)
 WWW = os.path.join(BASE_DIR, 'www')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 GAME_DATA_PATH = os.path.join(DATA_DIR, 'game_data.json')
+LEADERBOARD_PATH = os.path.join(DATA_DIR, 'leaderboard.json')
+PLAYER_PROFILE_COOKIE = 'gamevault_player'
+PLAYER_PROFILE_MAX_AGE = 60 * 60 * 24 * 180  # 180 days
+
 
 def create_client():
     client_id = os.urandom(16).hex()
@@ -61,8 +66,12 @@ def disconnect_client(client_id):
 @app.post('/api/socket/open')
 def api_socket_open():
     client_id = create_client()
+    remembered = parse_player_profile_cookie(request.cookies.get(PLAYER_PROFILE_COOKIE))
     broadcast_stats()
-    return jsonify({'clientId': client_id})
+    response = jsonify({'clientId': client_id, 'profile': remembered})
+    if remembered:
+        set_player_profile_cookie(response, remembered)
+    return response
 
 
 @app.post('/api/socket/send')
@@ -79,8 +88,12 @@ def api_socket_send():
         return jsonify({'error': 'invalid message'}), 400
     if not isinstance(msg, dict):
         return jsonify({'error': 'message must be an object'}), 400
-    handle_message(client_id, msg)
-    return jsonify({'ok': True})
+    cookie_profile = parse_player_profile_cookie(request.cookies.get(PLAYER_PROFILE_COOKIE))
+    updated_profile = handle_message(client_id, msg, cookie_profile)
+    response = jsonify({'ok': True})
+    if updated_profile:
+        set_player_profile_cookie(response, updated_profile)
+    return response
 
 
 @app.get('/api/socket/poll')
@@ -122,6 +135,26 @@ PAGES = [
     'minesweeper', 'flapty', 'neonrun',
 ]
 
+PAGE_ALIASES = {
+    'vault': 'games',
+    'vault-zero': 'x',
+    'vault-grid': '2048',
+    'vault-serpent': 'snake',
+    'vault-stack': 'tetris',
+    'vault-rook': 'chess',
+    'vault-sketch': 'drawing',
+    'vault-lex': 'wordgame',
+    'vault-paddle': 'pong',
+    'vault-fleet': 'battleship',
+    'vault-quiz': 'trivia',
+    'vault-blast': 'bomberman',
+    'vault-mine': 'minesweeper',
+    'vault-wing': 'flapty',
+    'vault-neon': 'neonrun',
+}
+
+CANONICAL_PATHS = {value: key for key, value in PAGE_ALIASES.items()}
+
 @app.route('/')
 def index():
     return send_from_directory(WWW, 'index.html')
@@ -141,10 +174,16 @@ def favicon():
 @app.route('/<page>/')
 @app.route('/<page>')
 def game_page(page):
-    if page in PAGES:
-        path = os.path.join(WWW, page, 'index.html')
+    canonical_page = PAGE_ALIASES.get(page, page)
+    if canonical_page in PAGES:
+        if page == canonical_page and canonical_page in CANONICAL_PATHS:
+            target = f"/{CANONICAL_PATHS[canonical_page]}/"
+            if request.query_string:
+                target += f"?{request.query_string.decode('utf-8', errors='ignore')}"
+            return redirect(target, code=302)
+        path = os.path.join(WWW, canonical_page, 'index.html')
         if os.path.exists(path):
-            return send_from_directory(os.path.join(WWW, page), 'index.html')
+            return send_from_directory(os.path.join(WWW, canonical_page), 'index.html')
     abort(404)
 
 # ── Global state ──────────────────────────────────────────────────────────────
@@ -163,6 +202,92 @@ GAME_DATA = load_game_data()
 DRAWING_WORDS = GAME_DATA.get('drawing_words', [])
 WORD_BOMB_SYLLABLES = GAME_DATA.get('wordbomb_syllables', {})
 TRIVIA_QUESTIONS = GAME_DATA.get('trivia_questions', [])
+
+# ── Persistence / cookies ─────────────────────────────────────────────────────
+def ensure_data_dir():
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+
+def save_json_atomic(path, payload):
+    ensure_data_dir()
+    tmp_path = f'{path}.tmp'
+    with open(tmp_path, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, path)
+
+
+def load_leaderboard():
+    if not os.path.exists(LEADERBOARD_PATH):
+        return []
+    try:
+        with open(LEADERBOARD_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if not isinstance(data, list):
+            return []
+        cleaned = []
+        for row in data[:50]:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get('name', '')).strip()
+            game = str(row.get('game', '')).strip()
+            try:
+                score = int(row.get('score', 0))
+            except Exception:
+                score = 0
+            try:
+                ts = int(row.get('time', int(time.time())))
+            except Exception:
+                ts = int(time.time())
+            if name and game:
+                cleaned.append({'name': name, 'game': game, 'score': score, 'time': ts})
+        cleaned.sort(key=lambda x: (-x['score'], x['time']))
+        return cleaned[:50]
+    except Exception:
+        return []
+
+
+def persist_leaderboard():
+    with _glock:
+        snapshot = leaderboard[:50]
+    save_json_atomic(LEADERBOARD_PATH, snapshot)
+
+
+def parse_player_profile_cookie(raw):
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    profile = {
+        'name': sanitize_player_name(data.get('name')),
+        'room': sanitize_room_id(data.get('room')),
+        'game': sanitize_game_name(data.get('game')),
+    }
+    return {k: v for k, v in profile.items() if v}
+
+
+def set_player_profile_cookie(response, profile):
+    payload = {
+        'name': sanitize_player_name(profile.get('name')),
+        'room': sanitize_room_id(profile.get('room')),
+        'game': sanitize_game_name(profile.get('game')),
+    }
+    payload = {k: v for k, v in payload.items() if v}
+    if not payload:
+        return response
+    response.set_cookie(
+        PLAYER_PROFILE_COOKIE,
+        json.dumps(payload, separators=(',', ':')),
+        max_age=PLAYER_PROFILE_MAX_AGE,
+        httponly=False,
+        secure=request.is_secure,
+        samesite='Lax',
+        path='/',
+    )
+    return response
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def ws_send(client_id, data):
@@ -211,8 +336,9 @@ def broadcast_stats():
 def add_leaderboard(name, game, score):
     with _glock:
         leaderboard.append({'name': name, 'game': game, 'score': score, 'time': int(time.time())})
-        leaderboard.sort(key=lambda x: -x['score'])
+        leaderboard.sort(key=lambda x: (-x['score'], x['time']))
         del leaderboard[50:]
+    persist_leaderboard()
     broadcast_leaderboard()
 
 def broadcast_leaderboard():
@@ -237,6 +363,43 @@ def cancel_timer(room, key):
         try: t.cancel()
         except Exception: pass
         room[key] = None
+
+
+def sanitize_player_name(name):
+    if name is None:
+        return None
+    cleaned = ' '.join(str(name).strip().split())
+    cleaned = cleaned[:24]
+    return cleaned or None
+
+
+def sanitize_room_id(room_id):
+    if room_id is None:
+        return None
+    cleaned = ''.join(ch for ch in str(room_id).strip().upper() if ch.isalnum() or ch in ('-', '_'))
+    return cleaned[:24] or None
+
+
+def sanitize_game_name(game):
+    if game is None:
+        return None
+    cleaned = str(game).strip().lower()
+    return cleaned if cleaned in ['drawing','wordgame','chess','pong','battleship','trivia','bomberman'] else None
+
+
+def find_name_conflict(name, exclude_client_id=None):
+    wanted = (sanitize_player_name(name) or '').casefold()
+    if not wanted:
+        return False
+    for cid, info in clients.items():
+        if cid == exclude_client_id:
+            continue
+        if not info.get('alive'):
+            continue
+        other = (info.get('name') or '').casefold()
+        if other == wanted:
+            return True
+    return False
 
 @lru_cache(maxsize=20000)
 def is_valid_wordbomb_word(word):
@@ -271,19 +434,31 @@ def create_room(room_key, game, public_room_id=None):
         'bomb_next_id': 0, 'bomb_stop': None,
     }
 
+
 def join_room(client_id, room_id, name, game):
     info = clients.get(client_id, {})
     if info.get('room'):
         leave_room(client_id)
 
-    room_key = f'{game}:{room_id}'
+    safe_game = sanitize_game_name(game) or 'drawing'
+    safe_room_id = sanitize_room_id(room_id) or 'DEFAULT'
+    requested_name = sanitize_player_name(name)
+    player_name = requested_name or f'Player{random.randint(100,999)}'
+
+    if find_name_conflict(player_name, exclude_client_id=client_id):
+        ws_send(client_id, {
+            'type': 'join_error',
+            'error': 'That username is already in use. Please choose a different one.'
+        })
+        return None
+
+    room_key = f'{safe_game}:{safe_room_id}'
     with _glock:
         if room_key not in rooms:
-            rooms[room_key] = create_room(room_key, game, room_id)
+            rooms[room_key] = create_room(room_key, safe_game, safe_room_id)
         room = rooms[room_key]
 
-    player_name = name or f'Player{random.randint(1,999)}'
-    clients[client_id].update({'name': player_name, 'room': room_key, 'game': game})
+    clients[client_id].update({'name': player_name, 'room': room_key, 'game': safe_game})
 
     player = {
         'name': player_name, 'client_id': client_id,
@@ -300,7 +475,7 @@ def join_room(client_id, room_id, name, game):
 
     player_list = get_player_list(room)
 
-    if game == 'pong':
+    if safe_game == 'pong':
         side = 'left' if len(room['players']) <= 1 else 'right'
         player['_side'] = side
         ws_send(client_id, {'type': 'joined', 'side': side, 'players': player_list})
@@ -310,14 +485,14 @@ def join_room(client_id, room_id, name, game):
         else:
             ws_send(client_id, {'type': 'pong_waiting', 'message': 'Waiting for opponent...'})
 
-    elif game == 'chess':
+    elif safe_game == 'chess':
         color = 'w' if len(room['players']) <= 1 else 'b'
         player['_chess_color'] = color
         ws_send(client_id, {'type': 'joined', 'color': color, 'players': player_list})
         if len(room['players']) == 2:
             broadcast_all(room, {'type': 'game_start', 'message': 'Game started!'})
 
-    elif game == 'battleship':
+    elif safe_game == 'battleship':
         is_host = len(room['players']) == 1
         if is_host:
             room['host'] = client_id
@@ -340,6 +515,9 @@ def join_room(client_id, room_id, name, game):
                 'message': f"{len(room['players'])} player(s) in room. Need 2 to start.",
                 'canStart': is_host or len(room['players']) >= 2
             })
+
+    return {'name': player_name, 'room': safe_room_id, 'game': safe_game}
+
 
 def leave_room(client_id):
     info = clients.get(client_id, {})
@@ -379,26 +557,28 @@ def leave_room(client_id):
         clients[client_id].update({'name': None, 'room': None, 'game': None})
 
 # ── HTTP socket message handling ──────────────────────────────────────────────
-def handle_message(client_id, msg):
+def handle_message(client_id, msg, cookie_profile=None):
     t = msg.get('type')
 
     if t == 'get_stats':
         ws_send(client_id, {'type': 'stats', **get_room_stats()})
         ws_send(client_id, {'type': 'leaderboard', 'scores': leaderboard[:10]})
-        return
+        return None
 
     if t == 'join':
-        join_room(client_id, msg.get('room', 'default'), msg.get('name'), msg.get('game', 'drawing'))
+        joined = join_room(client_id, msg.get('room', 'default'), msg.get('name'), msg.get('game', 'drawing'))
         broadcast_stats()
-        return
+        if joined:
+            return joined
+        return cookie_profile
 
     info = clients.get(client_id, {})
     room_id = info.get('room')
     if not room_id:
-        return
+        return cookie_profile
     room = rooms.get(room_id)
     if not room:
-        return
+        return cookie_profile
 
     game = room['game']
     if   game == 'drawing':    handle_drawing_msg(client_id, room, msg)
@@ -414,6 +594,12 @@ def handle_message(client_id, msg):
         elif game == 'wordgame':  start_word_game(room)
         elif game == 'trivia':    start_trivia(room)
         elif game == 'bomberman': start_bomberman(room)
+
+    return cookie_profile or {
+        'name': info.get('name'),
+        'room': room.get('id'),
+        'game': room.get('game'),
+    }
 
 # ── Drawing ───────────────────────────────────────────────────────────────────
 def start_drawing_game(room):
@@ -1117,6 +1303,7 @@ def cleanup_loop():
         for cid in stale_clients:
             disconnect_client(cid)
 
+leaderboard[:] = load_leaderboard()
 threading.Thread(target=cleanup_loop, daemon=True).start()
 
 # ── Run ───────────────────────────────────────────────────────────────────────

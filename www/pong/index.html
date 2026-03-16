@@ -6,7 +6,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Pong — GameVault</title>
+<title>Vault Paddle — Vault Atlas</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
 <style>
 * { margin:0;padding:0;box-sizing:border-box; }
@@ -18,7 +18,7 @@ header { width:100%;padding:10px 20px;border-bottom:1px solid rgba(0,200,255,0.2
   text-transform:uppercase;font-family:'Orbitron',monospace; }
 header h1 { font-family:'Orbitron',monospace;font-size:18px;color:#00c8ff;letter-spacing:3px; }
 .room-info { margin-left:auto;font-family:'Orbitron',monospace;font-size:11px;color:rgba(0,200,255,0.5); }
-#game-wrap { position:relative;flex:1;width:100%;display:flex;justify-content:center;align-items:center; }
+#vault-wrap { position:relative;flex:1;width:100%;display:flex;justify-content:center;align-items:center; }
 canvas { display:block;image-rendering:pixelated; }
 .overlay { position:absolute;inset:0;background:rgba(5,7,15,0.93);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
@@ -51,12 +51,12 @@ canvas { display:block;image-rendering:pixelated; }
 </head>
 <body>
 <header>
-  <a class="back" href="/games">← Back</a>
-  <h1>PONG</h1>
+  <a class="back" href="/vault">← Back</a>
+  <h1>VAULT PADDLE</h1>
   <div class="room-info" id="room-info"></div>
   <div class="ping-badge" id="ping-badge">Ping -- ms</div>
 </header>
-<div id="game-wrap">
+<div id="vault-wrap">
   <canvas id="c"></canvas>
   <div id="mobile-ctrl">
     <div class="paddle-ctrl">
@@ -69,7 +69,7 @@ canvas { display:block;image-rendering:pixelated; }
   </div>
   <div class="overlay" id="overlay">
     <div class="sub" id="ov-sub">MULTIPLAYER</div>
-    <h2 id="ov-title">PONG</h2>
+    <h2 id="ov-title">VAULT PADDLE</h2>
     <div class="score-big" id="ov-score" style="display:none">0 — 0</div>
     <p id="ov-msg">Loading...</p>
     <button class="ready-btn" id="ready-btn" style="display:none" onclick="sendReady()">Ready</button>
@@ -87,7 +87,7 @@ const ctx    = canvas.getContext('2d');
 const W = 800, H = 400;
 
 function resize() {
-  const wrap = document.getElementById('game-wrap');
+  const wrap = document.getElementById('vault-wrap');
   const maxW = Math.min(wrap.clientWidth, 900);
   const maxH = wrap.clientHeight - 80;
   const ratio = W / H;
@@ -105,7 +105,7 @@ let mySide = null;
 let ball    = { x: W/2, y: H/2 };
 let paddles = { left: H/2, right: H/2 };
 let scores  = { left: 0, right: 0 };
-let gameRunning = false;
+let sequenceLive = false;
 let myPaddleY = H/2;
 let keys = {};
 const PAD_H = 80, PAD_W = 12, BALL_R = 8, PAD_SPEED = 6;
@@ -121,6 +121,10 @@ ws.onopen = () => {
 
 ws.onmessage = (e) => {
   const msg = JSON.parse(e.data);
+  if (msg.type === 'join_error') {
+    alert(msg.error || 'Unable to join this room.');
+    return;
+  }
   handleMsg(msg);
 };
 
@@ -132,7 +136,7 @@ function handleMsg(msg) {
   switch (msg.type) {
     case 'joined':
       mySide = msg.side;
-      setOverlay('WAITING', 'Waiting for opponent...', false);
+      setOverlay('WAITING', 'Awaiting counterpart...', false);
       break;
 
     case 'player_joined':
@@ -144,7 +148,7 @@ function handleMsg(msg) {
 
     case 'pong_start':
       scores = msg.scores;
-      gameRunning = true;
+      sequenceLive = true;
       hideOverlay();
       break;
 
@@ -159,7 +163,7 @@ function handleMsg(msg) {
       break;
 
     case 'pong_over':
-      gameRunning = false;
+      sequenceLive = false;
       const won = msg.winner === myName;
       showOverlay(
         won ? '🏆 YOU WIN' : 'YOU LOSE',
@@ -225,11 +229,11 @@ function bindBtn(id, code) {
 bindBtn('btn-up',   'ArrowUp');
 bindBtn('btn-down', 'ArrowDown');
 
-// ─── Game loop ────────────────────────────────────────────────────────────────
+// ─── Sequence loop ────────────────────────────────────────────────────────────
 let lastSent = 0;
 function loop() {
   requestAnimationFrame(loop);
-  if (!gameRunning) return;
+  if (!sequenceLive) return;
 
   // Move my paddle
   const up   = keys['ArrowUp']   || keys['KeyW'];
@@ -313,7 +317,7 @@ function drawPaddle(x, cy, isMe) {
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────────
-setOverlay('PONG', 'Connecting...', false);
+setOverlay('VAULT PADDLE', 'Linking...', false);
 requestAnimationFrame(loop);
 </script>
 </body>

@@ -9,11 +9,11 @@
     token = Math.random().toString(36).substr(2,10);
     sessionStorage.setItem(key, token);
   }
-  // Keep gameTokenMap updated so /x/ redirects work too
+  // Keep vaultTokenMap updated so /x/ redirects work too
   try {
-    var map = JSON.parse(sessionStorage.getItem('gameTokenMap') || '{}');
+    var map = JSON.parse(sessionStorage.getItem('vaultTokenMap') || '{}');
     map[token] = location.pathname + location.search;
-    sessionStorage.setItem('gameTokenMap', JSON.stringify(map));
+    sessionStorage.setItem('vaultTokenMap', JSON.stringify(map));
   } catch(e) {}
   // Only rewrite if not already on /x/
   if (location.pathname !== '/x/') {
@@ -23,7 +23,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Flapty — GameVault</title>
+<title>Vault Wing — Vault Atlas</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
 <style>
 * { margin:0;padding:0;box-sizing:border-box; }
@@ -34,7 +34,7 @@ header { width:100%;padding:14px 24px;border-bottom:1px solid rgba(0,170,255,0.2
 .back { color:rgba(0,170,255,0.7);text-decoration:none;font-size:13px;letter-spacing:1px;
   text-transform:uppercase;font-family:'Orbitron',monospace; }
 header h1 { font-family:'Orbitron',monospace;font-size:20px;color:#00aaff;letter-spacing:3px; }
-.game-wrap { position:relative;margin-top:16px; }
+.vault-wrap { position:relative;margin-top:16px; }
 canvas { display:block;border-radius:12px;border:2px solid rgba(0,170,255,0.2);
   box-shadow:0 0 30px rgba(0,170,255,0.08); }
 .overlay { position:absolute;inset:0;border-radius:12px;background:rgba(5,7,15,0.88);
@@ -52,17 +52,17 @@ canvas { display:block;border-radius:12px;border:2px solid rgba(0,170,255,0.2);
 </head>
 <body>
 <header>
-  <a class="back" href="/games">← Back</a>
-  <h1>FLAPTY</h1>
+  <a class="back" href="/vault">← Back</a>
+  <h1>VAULT WING</h1>
 </header>
-<div class="game-wrap">
+<div class="vault-wrap">
   <canvas id="c" width="360" height="500"></canvas>
   <div class="overlay" id="overlay">
-    <h2 id="ov-title">FLAPTY</h2>
+    <h2 id="ov-title">VAULT WING</h2>
     <div class="score-big" id="ov-score" style="display:none">0</div>
     <p id="ov-msg">Tap or press Space to flap</p>
     <p class="hiscore" id="ov-best"></p>
-    <button class="play-btn" onclick="startGame()">Play</button>
+    <button class="play-btn" onclick="beginSequence()">Play</button>
   </div>
 </div>
 
@@ -90,7 +90,7 @@ function Pipe(x) {
   return { x, top, bottom: top + GAP, scored: false };
 }
 
-function startGame() {
+function beginSequence() {
   document.getElementById('overlay').style.display = 'none';
   bird = Bird();
   pipes = [Pipe(W + 100), Pipe(W + 100 + 220)];

@@ -6,7 +6,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Battleship — GameVault</title>
+<title>Vault Fleet — Vault Atlas</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
 <style>
 * { margin:0;padding:0;box-sizing:border-box; }
@@ -65,8 +65,8 @@ main { display:flex;flex-direction:column;align-items:center;padding:12px;gap:12
 </head>
 <body>
 <header>
-  <a class="back" href="/games">← Back</a>
-  <h1>BATTLESHIP</h1>
+  <a class="back" href="/vault">← Back</a>
+  <h1>VAULT FLEET</h1>
   <div class="room-tag" id="room-tag"></div>
   <div class="ping-badge" id="ping-badge">Ping -- ms</div>
 </header>
@@ -86,7 +86,7 @@ main { display:flex;flex-direction:column;align-items:center;padding:12px;gap:12
   </div>
 </main>
 <div class="overlay" id="overlay">
-  <h2 id="ov-title">BATTLESHIP</h2>
+  <h2 id="ov-title">VAULT FLEET</h2>
   <p id="ov-msg"></p>
   <button class="btn btn-primary" onclick="location.reload()">Play Again</button>
 </div>
@@ -97,7 +97,7 @@ document.getElementById('room-tag').textContent = 'ROOM: ' + roomId;
 
 const SHIPS = [
   {name:'Carrier',    size:5},
-  {name:'Battleship', size:4},
+  {name:'Vault Fleet', size:4},
   {name:'Cruiser',    size:3},
   {name:'Submarine',  size:3},
   {name:'Destroyer',  size:2},
@@ -120,7 +120,7 @@ const wsProto = location.protocol==='https:'?'wss':'ws';
 const ws = new WebSocket(`${wsProto}://${location.host}/ws`);
 GameVaultMP.bindPingDisplay(ws, 'ping-badge');
 ws.onopen = () => ws.send(JSON.stringify({type:'join',room:roomId,name:myName,game:'battleship'}));
-ws.onmessage = e => handleMsg(JSON.parse(e.data));
+ws.onmessage = e => { const d = JSON.parse(e.data); if (d.type === 'join_error') { alert(d.error || 'Unable to join this room.'); return; } handleMsg(d); };
 ws.onclose   = () => setStatus('Disconnected. Please refresh.');
 
 function send(obj) { if(ws.readyState===1) ws.send(JSON.stringify(obj)); }

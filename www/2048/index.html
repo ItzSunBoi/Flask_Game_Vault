@@ -9,11 +9,11 @@
     token = Math.random().toString(36).substr(2,10);
     sessionStorage.setItem(key, token);
   }
-  // Keep gameTokenMap updated so /x/ redirects work too
+  // Keep vaultTokenMap updated so /x/ redirects work too
   try {
-    var map = JSON.parse(sessionStorage.getItem('gameTokenMap') || '{}');
+    var map = JSON.parse(sessionStorage.getItem('vaultTokenMap') || '{}');
     map[token] = location.pathname + location.search;
-    sessionStorage.setItem('gameTokenMap', JSON.stringify(map));
+    sessionStorage.setItem('vaultTokenMap', JSON.stringify(map));
   } catch(e) {}
   // Only rewrite if not already on /x/
   if (location.pathname !== '/x/') {
@@ -23,7 +23,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>2048 — GameVault</title>
+<title>Vault Grid — Vault Atlas</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
 <style>
   * { margin:0;padding:0;box-sizing:border-box; }
@@ -66,20 +66,20 @@
 </head>
 <body>
 <header>
-  <a class="back" href="/games">← Back</a>
-  <h1>2048</h1>
+  <a class="back" href="/vault">← Back</a>
+  <h1>VAULT GRID</h1>
 </header>
 <div class="top-bar">
   <div class="score-box"><div class="label">Score</div><div class="val" id="score">0</div></div>
   <div class="score-box"><div class="label">Best</div><div class="val" id="best">0</div></div>
-  <button class="new-btn" onclick="newGame()">New Game</button>
+  <button class="new-btn" onclick="resetSequence()">Reset Sequence</button>
 </div>
 <div class="board-wrap">
   <div id="board"></div>
   <div class="overlay" id="overlay">
-    <h2 id="ov-title">2048</h2>
-    <p id="ov-msg">Combine tiles to reach 2048!</p>
-    <button class="new-btn" onclick="newGame()">Play</button>
+    <h2 id="ov-title">VAULT GRID</h2>
+    <p id="ov-msg">Merge tiles to reach the terminal sigil!</p>
+    <button class="new-btn" onclick="resetSequence()">Play</button>
   </div>
 </div>
 
@@ -93,7 +93,7 @@ const TEXT={0:'rgba(255,255,255,0.1)',2:'#ffd980',4:'#ffcc55',8:'#ffb030',16:'#f
 
 let grid, score=0, best=parseInt(localStorage.getItem('2048best')||'0');
 
-function newGame(){
+function resetSequence(){
   grid=Array.from({length:4},()=>Array(4).fill(0));
   score=0; addTile(); addTile();
   document.getElementById('overlay').classList.remove('show');
@@ -163,7 +163,7 @@ function checkEnd(){
     if(c<3&&grid[r][c]===grid[r][c+1])return;
   }
   setTimeout(()=>{
-    document.getElementById('ov-title').textContent='GAME OVER';
+    document.getElementById('ov-title').textContent='SEQUENCE CLOSED';
     document.getElementById('ov-msg').textContent='Score: '+score;
     document.getElementById('overlay').classList.add('show');
   },200);
@@ -183,9 +183,9 @@ document.addEventListener('touchend',e=>{
   else move(dy>0?'down':'up');
 });
 
-newGame();
-document.getElementById('ov-title').textContent='2048';
-document.getElementById('ov-msg').textContent='Combine tiles to reach 2048!';
+resetSequence();
+document.getElementById('ov-title').textContent='VAULT GRID';
+document.getElementById('ov-msg').textContent='Merge tiles to reach the terminal sigil!';
 document.getElementById('overlay').classList.add('show');
 </script>
 </body>
