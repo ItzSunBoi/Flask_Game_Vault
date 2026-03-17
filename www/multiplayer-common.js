@@ -43,29 +43,36 @@
     const storedName = localStorage.getItem('playerName') || '';
     const storedRoom = localStorage.getItem('lastRoomId') || '';
     const storedGame = localStorage.getItem('lastGameId') || '';
+    const storedParty = localStorage.getItem('partyId') || '';
 
     let room = params.get('room') || cookieProfile.room || storedRoom || '';
     let name = params.get('name') || cookieProfile.name || storedName || '';
     let game = opts.game || params.get('game') || cookieProfile.game || storedGame || '';
+    let party = params.get('party') || cookieProfile.party || storedParty || '';
 
     room = normalizeRoomCode(room, randRoomCode());
     name = normalizePlayerName(name, opts.defaultName || 'Player');
     game = String(game || '').trim().toLowerCase();
+    party = party ? normalizeRoomCode(party, '') : '';
 
     localStorage.setItem('playerName', name);
     localStorage.setItem('lastRoomId', room);
     if (game) localStorage.setItem('lastGameId', game);
-    writeProfileCookie({ name, room, game });
+    if (party) localStorage.setItem('partyId', party);
+    else localStorage.removeItem('partyId');
+    writeProfileCookie({ name, room, game, party });
 
     const next = new URLSearchParams(window.location.search);
     if (next.get('room') !== room) next.set('room', room);
     if (next.get('name') !== name) next.set('name', name);
+    if (party) next.set('party', party);
+    else next.delete('party');
     const nextUrl = `${window.location.pathname}?${next.toString()}`;
     if (nextUrl !== `${window.location.pathname}${window.location.search}`) {
       history.replaceState(null, '', nextUrl);
     }
 
-    return { roomId: room, playerName: name, game, params: next };
+    return { roomId: room, playerName: name, game, partyId: party, params: next };
   }
 
   function bindPingDisplay(ws, elementOrId) {

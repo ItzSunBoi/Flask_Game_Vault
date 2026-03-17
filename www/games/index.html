@@ -70,6 +70,35 @@
   }
   .nick-save:hover { opacity: 0.85; }
 
+  .party-bar {
+    background: rgba(123,47,255,0.06); border-bottom: 1px solid rgba(123,47,255,0.22);
+    padding: 14px 32px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px;
+  }
+  .party-label { color: rgba(224,240,255,0.62); font-size: 14px; letter-spacing: 1px; text-transform: uppercase; }
+  .party-input {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(123,47,255,0.25);
+    color: var(--text); padding: 8px 14px; border-radius: 8px; font-size: 15px;
+    font-family: 'Rajdhani', sans-serif; outline: none; width: 170px; text-transform: uppercase;
+  }
+  .party-input:focus { border-color: var(--accent2); }
+  .party-btn {
+    background: var(--accent2); color: #fff; border: none; padding: 9px 16px; border-radius: 8px;
+    font-family: 'Orbitron', monospace; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer;
+  }
+  .party-btn.alt { background: transparent; border: 1px solid rgba(123,47,255,0.25); color: var(--text); }
+  .party-pill {
+    padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(123,47,255,0.28);
+    background: rgba(123,47,255,0.08); color: #d7c6ff; font-size: 12px;
+  }
+  .party-members { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
+  .party-member {
+    padding: 6px 10px; border-radius: 999px; font-size: 12px;
+    border: 1px solid rgba(0,255,170,0.14); background: rgba(255,255,255,0.03); color: var(--text);
+  }
+  .party-member.offline { opacity: 0.5; }
+  .party-empty { color: var(--muted); font-size: 13px; }
+  .party-note { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+
   /* MAIN */
   main { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
   .section-title {
@@ -226,7 +255,99 @@
   <button class="nick-save" onclick="saveName()">Set</button>
 </div>
 
+<div class="party-bar">
+  <div class="party-label">Party:</div>
+  <input class="party-input" id="partyInput" placeholder="Party code" maxlength="24">
+  <button class="party-btn" onclick="createParty()">Create</button>
+  <button class="party-btn alt" onclick="joinPartyFromInput()">Join</button>
+  <button class="party-btn alt" onclick="leaveParty()">Leave</button>
+  <div class="party-pill" id="partyStatus">No party joined</div>
+  <div class="party-members" id="partyMembers"><div class="party-empty">Join or create a party to launch multiplayer games together.</div></div>
+</div>
+
 <main>
+  <div class="section-title">Party Vaults</div>
+  <div class="party-note" id="partyNote">Join a party to make this section live. Party vaults always use your party code as the room.</div>
+  <div class="vault-grid">
+    <a class="vault-card c-draw" onclick="openPartyRoom('drawing','🎨 Vault Sketch'); return false;" href="#">
+      <div class="vault-thumb">🎨</div>
+      <div class="vault-info">
+        <div class="vault-name">Vault Sketch</div>
+        <div class="vault-desc">Sketch the signal and let the others decode it before the trace fades.</div>
+        <div class="vault-meta">
+          <span class="vault-tag tag-multi">Party</span>
+          <span class="vault-players"><span id="party-d-players">0</span> inside</span>
+        </div>
+      </div>
+    </a>
+    <a class="vault-card c-word" onclick="openPartyRoom('wordgame','💣 Vault Lex'); return false;" href="#">
+      <div class="vault-thumb">💣</div>
+      <div class="vault-info">
+        <div class="vault-name">Vault Lex</div>
+        <div class="vault-desc">Offer a valid glyph fragment before the timer collapses.</div>
+        <div class="vault-meta">
+          <span class="vault-tag tag-multi">Party</span>
+          <span class="vault-players"><span id="party-w-players">0</span> inside</span>
+        </div>
+      </div>
+    </a>
+    <a class="vault-card c-chess" onclick="openPartyRoom('chess','♟ Vault Rook'); return false;" href="#">
+      <div class="vault-thumb">♟</div>
+      <div class="vault-info">
+        <div class="vault-name">Vault Rook</div>
+        <div class="vault-desc">A two-seat rook protocol with strict move verification.</div>
+        <div class="vault-meta">
+          <span class="vault-tag tag-multi">Party</span>
+          <span class="vault-players"><span id="party-c-players">0</span> inside</span>
+        </div>
+      </div>
+    </a>
+    <a class="vault-card c-pong" onclick="openPartyRoom('pong','🏓 Vault Paddle'); return false;" href="#">
+      <div class="vault-thumb">🏓</div>
+      <div class="vault-info">
+        <div class="vault-name">Vault Paddle</div>
+        <div class="vault-desc">A mirrored corridor duel. First to seven seals it.</div>
+        <div class="vault-meta">
+          <span class="vault-tag tag-multi">Party</span>
+          <span class="vault-players"><span id="party-p-players">0</span> inside</span>
+        </div>
+      </div>
+    </a>
+    <a class="vault-card c-battle" onclick="openPartyRoom('battleship','⚓ Vault Fleet'); return false;" href="#">
+      <div class="vault-thumb">⚓</div>
+      <div class="vault-info">
+        <div class="vault-name">Vault Fleet</div>
+        <div class="vault-desc">Position your hidden array and probe the opposing grid.</div>
+        <div class="vault-meta">
+          <span class="vault-tag tag-multi">Party</span>
+          <span class="vault-players"><span id="party-b-players">0</span> inside</span>
+        </div>
+      </div>
+    </a>
+    <a class="vault-card c-trivia" onclick="openPartyRoom('trivia','🧠 Vault Quiz'); return false;" href="#">
+      <div class="vault-thumb">🧠</div>
+      <div class="vault-info">
+        <div class="vault-name">Vault Quiz</div>
+        <div class="vault-desc">Rapid correct responses yield the highest archive score.</div>
+        <div class="vault-meta">
+          <span class="vault-tag tag-multi">Party</span>
+          <span class="vault-players"><span id="party-t-players">0</span> inside</span>
+        </div>
+      </div>
+    </a>
+    <a class="vault-card c-bomber" onclick="openPartyRoom('bomberman','💣 Vault Blast'); return false;" href="#">
+      <div class="vault-thumb">💣</div>
+      <div class="vault-info">
+        <div class="vault-name">Vault Blast</div>
+        <div class="vault-desc">Drop charges, clear debris, and outlast the other operatives.</div>
+        <div class="vault-meta">
+          <span class="vault-tag tag-multi">Party</span>
+          <span class="vault-players"><span id="party-bm-players">0</span> inside</span>
+        </div>
+      </div>
+    </a>
+  </div>
+
   <div class="section-title">Shared Vaults</div>
   <div class="vault-grid">
     <a class="vault-card c-draw" onclick="openRoom('drawing','🎨 Vault Sketch',true); return false;" href="#">
@@ -413,16 +534,92 @@ function publicPath(name) {
 
 let currentVault = '', currentVaultTitle = '';
 let playerName = localStorage.getItem('playerName') || '';
+let currentParty = (localStorage.getItem('partyId') || '').trim().toUpperCase();
+let statsSocket = null;
+let archiveLedgerLoaded = false;
+let lastGlobalStats = null;
+
 const nickInput = document.getElementById('nickInput');
+const partyInput = document.getElementById('partyInput');
+const onlineCountEl = document.getElementById('onlineCount');
+const partyStatusEl = document.getElementById('partyStatus');
+const partyMembersEl = document.getElementById('partyMembers');
+const partyNoteEl = document.getElementById('partyNote');
 if (playerName) nickInput.value = playerName;
+if (currentParty) partyInput.value = currentParty;
+
+function normalizeCode(value) {
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 24);
+}
 
 function saveName() {
   playerName = nickInput.value.trim() || 'Player' + Math.floor(Math.random()*900+100);
   nickInput.value = playerName;
   localStorage.setItem('playerName', playerName);
+  if (currentParty && statsSocket && statsSocket.readyState === 1) {
+    statsSocket.send(JSON.stringify({ type: 'join_party', party: currentParty, name: playerName }));
+  }
 }
 
-function openRoom(vaultKey, title, mp) {
+function updatePartyStatusText(onlineCount) {
+  if (currentParty) {
+    partyStatusEl.textContent = `Party ${currentParty} · ${onlineCount || 0} online`;
+    partyNoteEl.textContent = 'Party vaults launch directly into your shared party room for each multiplayer game.';
+  } else {
+    partyStatusEl.textContent = 'No party joined';
+    partyNoteEl.textContent = 'Join a party to make this section live. Party vaults always use your party code as the room.';
+  }
+}
+
+function renderPartyMembers(members) {
+  if (!members || !members.length) {
+    partyMembersEl.innerHTML = '<div class="party-empty">Join or create a party to launch multiplayer games together.</div>';
+    updatePartyStatusText(0);
+    return;
+  }
+  const onlineCount = members.filter(m => m && m.online).length;
+  partyMembersEl.innerHTML = members.map(member => {
+    const game = member.game ? ` · ${member.game}` : '';
+    return `<div class="party-member ${member.online ? '' : 'offline'}">${member.name}${member.online ? '' : ' (offline)'}${game}</div>`;
+  }).join('');
+  updatePartyStatusText(onlineCount);
+}
+
+function updateGlobalStats(d) {
+  lastGlobalStats = d || {};
+  document.getElementById('d-players').textContent = d.drawing || 0;
+  document.getElementById('w-players').textContent = d.wordgame || 0;
+  document.getElementById('c-players').textContent = d.chess || 0;
+  document.getElementById('p-players').textContent = d.pong || 0;
+  document.getElementById('b-players').textContent = d.battleship || 0;
+  document.getElementById('t-players').textContent = d.trivia || 0;
+  document.getElementById('bm-players').textContent = d.bomberman || 0;
+  if (!currentParty) onlineCountEl.textContent = d.total || 0;
+}
+
+function updatePartyStats(stats) {
+  const s = stats || {};
+  document.getElementById('party-d-players').textContent = s.drawing || 0;
+  document.getElementById('party-w-players').textContent = s.wordgame || 0;
+  document.getElementById('party-c-players').textContent = s.chess || 0;
+  document.getElementById('party-p-players').textContent = s.pong || 0;
+  document.getElementById('party-b-players').textContent = s.battleship || 0;
+  document.getElementById('party-t-players').textContent = s.trivia || 0;
+  document.getElementById('party-bm-players').textContent = s.bomberman || 0;
+  if (currentParty) onlineCountEl.textContent = s.total || 0;
+}
+
+function syncPartyStorage() {
+  if (currentParty) {
+    localStorage.setItem('partyId', currentParty);
+    partyInput.value = currentParty;
+  } else {
+    localStorage.removeItem('partyId');
+    partyInput.value = '';
+  }
+}
+
+function openRoom(vaultKey, title) {
   if (!playerName) { saveName(); }
   currentVault = vaultKey; currentVaultTitle = title;
   document.getElementById('modal-title').textContent = title;
@@ -430,22 +627,18 @@ function openRoom(vaultKey, title, mp) {
   document.getElementById('modal').classList.add('show');
 }
 
+function openPartyRoom(vaultKey) {
+  if (!currentParty) {
+    partyInput.focus();
+    return;
+  }
+  if (!playerName) saveName();
+  const name = encodeURIComponent(playerName);
+  const party = encodeURIComponent(currentParty);
+  window.location.href = `${publicPath(vaultKey)}?room=${party}&name=${name}&party=${party}`;
+}
+
 function closeModal() { document.getElementById('modal').classList.remove('show'); }
-
-// ── Token map ──────────────────────────────────────────────────
-function randToken() { return Math.random().toString(36).substr(2, 8); }
-
-function getTokenMap() {
-  return JSON.parse(sessionStorage.getItem('vaultTokenMap') || '{}');
-}
-
-function makeToken(dest) {
-  const map = getTokenMap();
-  const token = randToken();
-  map[token] = dest;
-  sessionStorage.setItem('vaultTokenMap', JSON.stringify(map));
-  return token;
-}
 
 function goVault(vaultKey) {
   window.location.href = publicPath(vaultKey);
@@ -463,40 +656,91 @@ function enterVault(joining) {
     room = Math.random().toString(36).substr(2,6).toUpperCase();
   }
   const name = encodeURIComponent(playerName);
-  const dest = `${publicPath(currentVault)}?room=${encodeURIComponent(room)}&name=${name}`;
+  const partyPart = currentParty ? `&party=${encodeURIComponent(currentParty)}` : '';
+  const dest = `${publicPath(currentVault)}?room=${encodeURIComponent(room)}&name=${name}${partyPart}`;
   window.location.href = dest;
 }
 
-document.getElementById('roomInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') enterVault(true);
-});
+function createParty() {
+  partyInput.value = normalizeCode(partyInput.value) || Math.random().toString(36).substr(2,6).toUpperCase();
+  joinParty(partyInput.value);
+}
 
-// WebSocket for online count
-let archiveLedgerLoaded = false;
+function joinPartyFromInput() {
+  joinParty(partyInput.value);
+}
+
+function joinParty(code) {
+  const party = normalizeCode(code);
+  if (!party) {
+    partyInput.focus();
+    return;
+  }
+  if (!playerName) saveName();
+  currentParty = party;
+  syncPartyStorage();
+  updatePartyStatusText(0);
+  if (statsSocket && statsSocket.readyState === 1) {
+    statsSocket.send(JSON.stringify({ type: 'join_party', party, name: playerName }));
+    statsSocket.send(JSON.stringify({ type: 'get_stats', party }));
+  }
+}
+
+function leaveParty() {
+  const oldParty = currentParty;
+  currentParty = '';
+  syncPartyStorage();
+  renderPartyMembers([]);
+  updatePartyStats({});
+  onlineCountEl.textContent = '0';
+  if (statsSocket && statsSocket.readyState === 1 && oldParty) {
+    statsSocket.send(JSON.stringify({ type: 'leave_party' }));
+    statsSocket.send(JSON.stringify({ type: 'get_stats' }));
+  }
+}
 
 function connectStats() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const ws = new WebSocket(`${proto}//${location.host}/ws`);
+  statsSocket = ws;
   ws.onmessage = e => {
     try {
       const d = JSON.parse(e.data);
-      if (d.type === 'stats') {
-        document.getElementById('onlineCount').textContent = d.total || 0;
-        document.getElementById('d-players').textContent = d.drawing || 0;
-        document.getElementById('w-players').textContent = d.wordgame || 0;
-        document.getElementById('c-players').textContent = d.chess || 0;
-        document.getElementById('p-players').textContent = d.pong || 0;
-        document.getElementById('b-players').textContent = d.battleship || 0;
-        document.getElementById('t-players').textContent = d.trivia || 0;
-        document.getElementById('bm-players').textContent = d.bomberman || 0;
+      if (d.type === 'stats') updateGlobalStats(d);
+      if (d.type === 'party_state') {
+        if (!d.party) {
+          currentParty = '';
+          syncPartyStorage();
+          renderPartyMembers([]);
+          updatePartyStats({});
+          if (lastGlobalStats) onlineCountEl.textContent = lastGlobalStats.total || 0;
+        } else {
+          currentParty = d.party;
+          syncPartyStorage();
+          renderPartyMembers(d.members || []);
+          updatePartyStats(d.stats || {});
+        }
       }
       if (d.type === 'leaderboard' && !archiveLedgerLoaded) { renderArchiveLedger(d.scores); archiveLedgerLoaded = true; }
     } catch(e){}
   };
   ws.onclose = () => setTimeout(connectStats, 3000);
-  ws.onopen = () => ws.send(JSON.stringify({type:'get_stats'}));
+  ws.onopen = () => {
+    ws.send(JSON.stringify({type:'get_stats', party: currentParty || undefined}));
+    if (currentParty) ws.send(JSON.stringify({ type: 'join_party', party: currentParty, name: playerName || nickInput.value.trim() || undefined }));
+  };
 }
+
 connectStats();
+updatePartyStatusText(0);
+renderPartyMembers([]);
+
+document.getElementById('roomInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') enterVault(true);
+});
+partyInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') joinPartyFromInput();
+});
 
 function renderArchiveLedger(scores) {
   const tbody = document.getElementById('leaderboard');
