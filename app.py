@@ -41,7 +41,7 @@ def create_client():
     client_id = os.urandom(16).hex()
     now = time.time()
     clients[client_id] = {
-        'name': None, 'room': None, 'game': None,
+        'name': None, 'room': None, 'game': None, 'party': None,
         'queue': [], 'cond': threading.Condition(), 'alive': True,
         'created_at': now, 'last_seen': now, 'disconnected_at': None,
     }
@@ -67,6 +67,8 @@ def disconnect_client(client_id):
         with cond:
             cond.notify_all()
     broadcast_stats()
+    if info.get('party'):
+        broadcast_party_state(info.get('party'))
 
 
 @app.post('/api/socket/open')
@@ -195,8 +197,9 @@ def game_page(page):
 # ── Global state ──────────────────────────────────────────────────────────────
 rooms      = {}          # roomId -> room dict
 clients    = {}          # client_id -> info dict
+parties    = {}          # party_id -> party dict
 leaderboard   = []
-_glock = threading.Lock()   # guards rooms / clients / leaderboard / global_online
+_glock = threading.Lock()   # guards rooms / clients / parties / leaderboard / global_online
 
 # ── External game data ────────────────────────────────────────────────────────
 def load_game_data():
@@ -271,6 +274,7 @@ def parse_player_profile_cookie(raw):
         'name': sanitize_player_name(data.get('name')),
         'room': sanitize_room_id(data.get('room')),
         'game': sanitize_game_name(data.get('game')),
+        'party': sanitize_room_id(data.get('party')),
     }
     return {k: v for k, v in profile.items() if v}
 
@@ -280,6 +284,7 @@ def set_player_profile_cookie(response, profile):
         'name': sanitize_player_name(profile.get('name')),
         'room': sanitize_room_id(profile.get('room')),
         'game': sanitize_game_name(profile.get('game')),
+        'party': sanitize_room_id(profile.get('party')),
     }
     payload = {k: v for k, v in payload.items() if v}
     if not payload:
@@ -325,14 +330,127 @@ def shuffle(lst):
     random.shuffle(lst)
     return lst
 
+MULTIPLAYER_GAMES = ['drawing','wordgame','chess','pong','battleship','trivia','bomberman']
+
+
+def create_party(party_id):
+    return {
+        'id': party_id,
+        'members': {},
+    }
+
+
+def get_party_member_name(info):
+    return sanitize_player_name(info.get('name')) or None
+
+
+def remove_client_from_party(client_id, party_id=None):
+    info = clients.get(client_id, {})
+    party_key = sanitize_room_id(party_id or info.get('party'))
+    if not party_key:
+        if client_id in clients:
+            clients[client_id]['party'] = None
+        return None
+    party = parties.get(party_key)
+    if party:
+        remove_keys = [
+            key for key, member in list(party.get('members', {}).items())
+            if member.get('client_id') == client_id
+        ]
+        for key in remove_keys:
+            party['members'].pop(key, None)
+        if not party.get('members'):
+            parties.pop(party_key, None)
+    if client_id in clients:
+        clients[client_id]['party'] = None
+    return party_key
+
+
+def get_party_stats(party_id):
+    stats = {g: 0 for g in MULTIPLAYER_GAMES}
+    party_key = sanitize_room_id(party_id)
+    party = parties.get(party_key) if party_key else None
+    members = list((party or {}).get('members', {}).values())
+    stats['total'] = sum(1 for member in members if clients.get(member.get('client_id'), {}).get('alive'))
+    for member in members:
+        info = clients.get(member.get('client_id'), {})
+        if not info.get('alive'):
+            continue
+        game = info.get('game')
+        if game in stats:
+            stats[game] += 1
+    return stats
+
+
+def get_party_payload(party_id):
+    party_key = sanitize_room_id(party_id)
+    party = parties.get(party_key) if party_key else None
+    members = []
+    if party:
+        for member in party.get('members', {}).values():
+            info = clients.get(member.get('client_id'), {})
+            members.append({
+                'name': member.get('name'),
+                'online': bool(info.get('alive')),
+                'game': info.get('game'),
+                'room': info.get('room'),
+            })
+    members.sort(key=lambda m: (not m['online'], (m.get('name') or '').casefold()))
+    return {
+        'type': 'party_state',
+        'party': party_key,
+        'members': members,
+        'stats': get_party_stats(party_key),
+    }
+
+
+def broadcast_party_state(party_id):
+    payload = get_party_payload(party_id)
+    if not payload.get('party'):
+        return
+    party = parties.get(payload['party'])
+    if not party:
+        return
+    for member in list(party.get('members', {}).values()):
+        ws_send(member.get('client_id'), payload)
+
+
+def join_party(client_id, party_id, name):
+    party_key = sanitize_room_id(party_id)
+    player_name = sanitize_player_name(name) or sanitize_player_name(clients.get(client_id, {}).get('name'))
+    if not party_key or not player_name or client_id not in clients:
+        return None
+
+    current_party = clients[client_id].get('party')
+    if current_party and current_party != party_key:
+        old_party = remove_client_from_party(client_id, current_party)
+        if old_party:
+            broadcast_party_state(old_party)
+
+    party = parties.setdefault(party_key, create_party(party_key))
+    member_key = player_name.casefold()
+    existing = party['members'].get(member_key)
+    old_client_id = existing.get('client_id') if existing else None
+    if old_client_id and old_client_id != client_id and old_client_id in clients:
+        clients[old_client_id]['party'] = None
+
+    party['members'][member_key] = {'name': player_name, 'client_id': client_id}
+    clients[client_id]['party'] = party_key
+    if not clients[client_id].get('name'):
+        clients[client_id]['name'] = player_name
+    broadcast_party_state(party_key)
+    return party_key
+
+
 def get_room_stats():
-    stats = {g: 0 for g in ['drawing','wordgame','chess','pong','battleship','trivia','bomberman']}
+    stats = {g: 0 for g in MULTIPLAYER_GAMES}
     stats['total'] = sum(1 for info in clients.values() if info.get('alive'))
     for r in rooms.values():
         g = r['game']
         if g in stats:
             stats[g] += len([cid for cid in r['clients'] if clients.get(cid, {}).get('alive')])
     return stats
+
 
 def broadcast_stats():
     data = {'type': 'stats', **get_room_stats()}
@@ -583,16 +701,15 @@ def join_room(client_id, room_id, name, game):
         if room_key not in rooms:
             rooms[room_key] = create_room(room_key, safe_game, safe_room_id)
         room = rooms[room_key]
-        existing_player = find_room_player(room, player_name)
 
-    if room.get('finalized') and not existing_player:
-        try:
-            del rooms[room_key]
-        except Exception:
-            pass
-        room = create_room(room_key, safe_game, safe_room_id)
-        rooms[room_key] = room
-        existing_player = None
+        # Once a room is finalized, the next join should start from a clean slate.
+        # Otherwise stale players from the finished match remain in the room and
+        # rejoining with the same name creates duplicated usernames on "Play Again".
+        if room.get('finalized'):
+            rooms[room_key] = create_room(room_key, safe_game, safe_room_id)
+            room = rooms[room_key]
+
+        existing_player = find_room_player(room, player_name)
 
     max_players = max_players_for_game(safe_game)
     if not existing_player and max_players and len(room.get('players', [])) >= max_players:
@@ -611,8 +728,6 @@ def join_room(client_id, room_id, name, game):
             })
             return None
 
-    if room.get('finalized'):
-        existing_player = None
     clients[client_id].update({'name': player_name, 'room': room_key, 'game': safe_game})
 
     reconnected = False
@@ -728,6 +843,7 @@ def join_room(client_id, room_id, name, game):
 
 def leave_room(client_id):
     info = clients.get(client_id, {})
+    party_id = info.get('party')
     room_id = info.get('room')
     if not room_id:
         return
@@ -794,20 +910,49 @@ def leave_room(client_id):
 
     if client_id in clients:
         clients[client_id].update({'name': None, 'room': None, 'game': None})
+    if party_id:
+        broadcast_party_state(party_id)
 
 # ── HTTP socket message handling ──────────────────────────────────────────────
 def handle_message(client_id, msg, cookie_profile=None):
     t = msg.get('type')
+    remembered_party = sanitize_room_id(msg.get('party') or (cookie_profile or {}).get('party'))
 
     if t == 'get_stats':
         ws_send(client_id, {'type': 'stats', **get_room_stats()})
         ws_send(client_id, {'type': 'leaderboard', 'scores': leaderboard[:50]})
-        return None
+        if remembered_party:
+            ws_send(client_id, get_party_payload(remembered_party))
+        return cookie_profile
+
+    if t == 'join_party':
+        party_id = join_party(client_id, msg.get('party'), msg.get('name'))
+        if not party_id:
+            return cookie_profile
+        profile = dict(cookie_profile or {})
+        profile.update({
+            'name': sanitize_player_name(msg.get('name')) or profile.get('name') or clients.get(client_id, {}).get('name'),
+            'party': party_id,
+        })
+        return profile
+
+    if t == 'leave_party':
+        old_party = remove_client_from_party(client_id)
+        if old_party:
+            broadcast_party_state(old_party)
+        profile = dict(cookie_profile or {})
+        profile.pop('party', None)
+        return profile
 
     if t == 'join':
+        if remembered_party:
+            join_party(client_id, remembered_party, msg.get('name'))
         joined = join_room(client_id, msg.get('room', 'default'), msg.get('name'), msg.get('game', 'drawing'))
         broadcast_stats()
+        if clients.get(client_id, {}).get('party'):
+            broadcast_party_state(clients[client_id]['party'])
         if joined:
+            joined['party'] = clients.get(client_id, {}).get('party') or remembered_party
             return joined
         return cookie_profile
 
@@ -1658,9 +1803,13 @@ def cleanup_loop():
         for cid in stale_clients:
             disconnect_client(cid)
         for cid in expired_disconnected:
+            party_id = clients.get(cid, {}).get('party')
             leave_room(cid)
+            remove_client_from_party(cid, party_id)
             clients.pop(cid, None)
             broadcast_stats()
+            if party_id:
+                broadcast_party_state(party_id)
 
 leaderboard[:] = load_leaderboard()
 threading.Thread(target=cleanup_loop, daemon=True).start()
