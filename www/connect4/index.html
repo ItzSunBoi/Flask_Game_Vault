@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/http-socket.js"></script>
+  <script src="/multiplayer-common.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vault Connect 4 — Vault Atlas</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body{background:#05070f;color:#e0f0ff;font-family:'Rajdhani',sans-serif;margin:0}
+    header{padding:14px 22px;border-bottom:1px solid rgba(0,255,170,.2);display:flex;gap:12px;align-items:center}
+    .back{color:#00ffaa;text-decoration:none;font-family:'Orbitron',monospace;font-size:12px}
+    h1{font-family:'Orbitron',monospace;font-size:18px;color:#00ffaa;letter-spacing:2px;margin:0}
+    main{max-width:900px;margin:24px auto;padding:0 16px}
+    .panel{background:#0d1426;border:1px solid rgba(0,255,170,.18);border-radius:14px;padding:16px}
+    #board{display:grid;grid-template-columns:repeat(7,54px);gap:8px;justify-content:center;margin-top:14px}
+    .slot{width:54px;height:54px;border-radius:50%;background:#1a233d;border:1px solid rgba(255,255,255,.12);cursor:pointer}
+    .p1{background:#ff4466}.p2{background:#ffcc00}
+  </style>
+</head>
+<body>
+<header><a class="back" href="/vault">← Back</a><h1>Vault Connect 4</h1></header>
+<main><div class="panel"><div id="status">Connecting…</div><div id="board"></div></div></main>
+<script>
+const {roomId,playerName}=GameVaultMP.normalizeMultiplayerParams({defaultName:'Player'});
+const ws=new WebSocket((location.protocol==='https:'?'wss:':'ws:')+'//'+location.host+'/ws');
+let board=[];
+ws.onopen=()=>ws.send(JSON.stringify({type:'join',room:roomId,name:playerName,game:'connect4'}));
+ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='joined'&&m.isHost)ws.send(JSON.stringify({type:'start_game'}));if(m.type==='c4_state'){board=m.board||[];render(m);}};
+function render(m){document.getElementById('status').textContent=m.winner?`Winner: ${m.winner}`:`Turn: ${((m.players||[])[m.turn]||{}).name||'-'}`;const g=document.getElementById('board');g.innerHTML='';for(let r=0;r<6;r++){for(let c=0;c<7;c++){const d=document.createElement('div');d.className='slot '+(board[r]?.[c]===1?'p1':board[r]?.[c]===2?'p2':'');d.onclick=()=>ws.send(JSON.stringify({type:'c4_drop',col:c}));g.appendChild(d);}}}
+</script>
+</body>
+</html>

@@ -346,6 +346,11 @@
         </div>
       </div>
     </a>
+    <a class="vault-card c-word" onclick="openPartyRoom('connect4','🔴 Vault Connect 4'); return false;" href="#"><div class="vault-thumb">🔴</div><div class="vault-info"><div class="vault-name">Vault Connect 4</div><div class="vault-desc">Drop linked discs and claim four in a row.</div><div class="vault-meta"><span class="vault-tag tag-multi">Party</span></div></div></a>
+    <a class="vault-card c-trivia" onclick="openPartyRoom('uno','🃏 Vault UNO'); return false;" href="#"><div class="vault-thumb">🃏</div><div class="vault-info"><div class="vault-name">Vault UNO</div><div class="vault-desc">Color-match and action-chain your hand away first.</div><div class="vault-meta"><span class="vault-tag tag-multi">Party</span></div></div></a>
+    <a class="vault-card c-draw" onclick="openPartyRoom('codenames','🕶 Vault Codenames'); return false;" href="#"><div class="vault-thumb">🕶</div><div class="vault-info"><div class="vault-name">Vault Codenames</div><div class="vault-desc">Team clue battles with hidden keycards.</div><div class="vault-meta"><span class="vault-tag tag-multi">Party</span></div></div></a>
+    <a class="vault-card c-battle" onclick="openPartyRoom('mafia','🌙 Vault Mafia'); return false;" href="#"><div class="vault-thumb">🌙</div><div class="vault-info"><div class="vault-name">Vault Mafia Lite</div><div class="vault-desc">Night/day deduction with hidden roles.</div><div class="vault-meta"><span class="vault-tag tag-multi">Party</span></div></div></a>
+    <a class="vault-card c-pong" onclick="openPartyRoom('curvefever','🌀 Vault Curve'); return false;" href="#"><div class="vault-thumb">🌀</div><div class="vault-info"><div class="vault-name">Vault Curve</div><div class="vault-desc">Steer neon trails and survive collisions.</div><div class="vault-meta"><span class="vault-tag tag-multi">Party</span></div></div></a>
   </div>
 
   <div class="section-title">Shared Vaults</div>
@@ -427,6 +432,11 @@
         </div>
       </div>
     </a>
+    <a class="vault-card c-word" onclick="openRoom('connect4','🔴 Vault Connect 4',true); return false;" href="#"><div class="vault-thumb">🔴</div><div class="vault-info"><div class="vault-name">Vault Connect 4</div><div class="vault-desc">Drop linked discs and claim four in a row.</div><div class="vault-meta"><span class="vault-tag tag-multi">2 Seats</span></div></div></a>
+    <a class="vault-card c-trivia" onclick="openRoom('uno','🃏 Vault UNO',true); return false;" href="#"><div class="vault-thumb">🃏</div><div class="vault-info"><div class="vault-name">Vault UNO</div><div class="vault-desc">Color-match and action-chain your hand away first.</div><div class="vault-meta"><span class="vault-tag tag-multi">2+ Seats</span></div></div></a>
+    <a class="vault-card c-draw" onclick="openRoom('codenames','🕶 Vault Codenames',true); return false;" href="#"><div class="vault-thumb">🕶</div><div class="vault-info"><div class="vault-name">Vault Codenames</div><div class="vault-desc">Team clue battles with hidden keycards.</div><div class="vault-meta"><span class="vault-tag tag-multi">4+ Seats</span></div></div></a>
+    <a class="vault-card c-battle" onclick="openRoom('mafia','🌙 Vault Mafia',true); return false;" href="#"><div class="vault-thumb">🌙</div><div class="vault-info"><div class="vault-name">Vault Mafia Lite</div><div class="vault-desc">Night/day deduction with hidden roles.</div><div class="vault-meta"><span class="vault-tag tag-multi">4+ Seats</span></div></div></a>
+    <a class="vault-card c-pong" onclick="openRoom('curvefever','🌀 Vault Curve',true); return false;" href="#"><div class="vault-thumb">🌀</div><div class="vault-info"><div class="vault-name">Vault Curve</div><div class="vault-desc">Steer neon trails and survive collisions.</div><div class="vault-meta"><span class="vault-tag tag-multi">2+ Seats</span></div></div></a>
   </div>
 
   <div class="section-title">Private Vaults</div>
@@ -526,6 +536,11 @@ const pathMap = {
   minesweeper: 'vault-mine',
   flapty: 'vault-wing',
   neonrun: 'vault-neon',
+  connect4: 'vault-connect4',
+  uno: 'vault-uno',
+  codenames: 'vault-codenames',
+  mafia: 'vault-mafia',
+  curvefever: 'vault-curve',
 };
 
 function publicPath(name) {
